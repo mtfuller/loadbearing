@@ -14,44 +14,45 @@ the number more precise.
 ## Commands
 
 ```sh
-cd poc && ./build.sh                 # concatenates src/ into loadbearing.html, syntax-checks it
-node poc/tests/engine.test.js        # must pass before any commit
-node poc/tests/ui.smoke.js           # needs Playwright; run for any UI change
+npm run dev                           # run the React app on localhost:5173
+npm run build                         # build React app and standalone prototype
+npm test                              # engine tests; must pass before any commit
+npm run test:ui                       # Playwright smoke tests for React changes
+npm run test:legacy-ui                # smoke test the original standalone UI
 ```
 
-There is no bundler, framework or package to install for the app itself. Keep it that
-way until the planned TypeScript port (`docs/DESIGN.md` §13). The build is plain
-concatenation in a fixed order: engine modules first, then UI, then `main.js`.
+The current UI uses React, Vite, and React Flow. The original standalone proof of
+concept remains in `poc/`; `poc/build.sh` concatenates its modules in a fixed order.
+The React app loads the pure engine modules from `poc/src/` through `scripts/copy-engine.mjs`.
 
 ## Where to change what
 
 | To change… | Edit |
 | --- | --- |
 | The workload language, checks, path enumeration | `poc/src/lang.js` |
-| Step-through behavior or mock data | `poc/src/run.js`, UI in `ui-debug.js` |
+| Step-through behavior or mock data | `poc/src/run.js`, React presentation in `src/main.jsx` |
 | Products, regions, network rules, Deploy validation | `poc/src/infra.js` (v1 moves products to `catalog/*.json`) |
 | Latency, capacity, queueing, playback, stress, batch | `poc/src/sim.js` |
 | Example Build and Deploys | `poc/src/starter.js` (regenerate `examples/` after) |
-| Build canvas and editor | `poc/src/ui-build.js` |
-| Deploy board, drag and drop, inspectors | `poc/src/ui-deploy.js` |
-| Scenario editor and results | `poc/src/ui-sim.js`; playback and single-request stepping in `ui-play.js` |
-| State, undo, saving, events | `poc/src/ui-core.js` |
-| Styles and tokens (light and dark) | `poc/src/shell.html` |
+| React UI and canvas | `src/main.jsx` |
+| React UI styles | `src/styles.css` |
+| Original Build, Deploy, and Simulate UI | `poc/src/ui-*.js` (parity reference) |
 
 ## Invariants (don't break these)
 
 - **Engine modules are pure.** `lang`, `run`, `infra` and `sim` never touch the DOM. Results are deterministic for a given seed. Tests load these modules in a Node `vm` context.
 - **Logic and infrastructure stay separate.** A Build never names a product. A Deploy never edits logic.
-- **Every edit goes through `commit(mutate)`**, so undo and redo keep working. A Deploy fix is a function `apply(deploy)` run through `commit`.
+- **Every document edit goes through the React app's `commit()`**, so undo and redo keep working. Engine functions remain pure.
 - **Every number shown has an explanation path:** the step, the resource and the assumption behind it. If you add a metric, add its "why".
 - **Document kinds** are `loadbearing-build` and `loadbearing-deploy`. Old `meridian-*` documents must keep loading. Add a migration whenever you change a schema.
-- **Events use attributes:** `data-act` (click), `data-ch` (change), `data-in` (input), handled by the `ACT`, `CH` and `IN` tables. Don't bind listeners to elements that get re-rendered.
+- **React owns the interface state and events.** Keep app mutations in state transactions rather than mutating rendered nodes directly.
+- **Keep Build and Deploy documents separate.** The library persists them independently; workspace persistence keeps both together, and older `meridian-*` document kinds/keys remain readable.
 - **Colors come from CSS tokens** with light and dark values. Heat and status always carry text too, never color alone.
 - **The UI speaks plain language.** No internal ids in visible text. Use short sentences and sentence case, and tell the learner what to do next.
 
 ## Conventions
 
-- Plain ES2020, no imports. Each module is top-level functions and constants. The last line may export for Node: `if (typeof module !== 'undefined') module.exports = …` (the build strips it).
+- Keep engine modules in plain JavaScript and free of UI dependencies. Existing modules export CommonJS APIs for the Node vm tests and are loaded as classic browser scripts for the React app.
 - Keep functions small and named for what they return (`planPath`, `resourceStates`).
 - New model constants go in one place with a comment naming the source or assumption. They will appear on the Assumptions page (`DESIGN.md` L7).
 - Cloud facts (limits, regions, modes) need a source URL and a "checked" date. Put them in catalog data, never in UI strings.

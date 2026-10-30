@@ -1,3 +1,9 @@
 node_modules/
+dist/
+public/engine/lang.js
+public/engine/run.js
+public/engine/infra.js
+public/engine/sim.js
+public/engine/starter.js
 poc/tests/out/
 poc/.check.js
