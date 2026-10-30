@@ -3,9 +3,21 @@
   "private": true,
   "description": "Learn system design by experiment: design logic, map it onto cloud infrastructure, simulate it at scale.",
   "scripts": {
-    "build": "bash poc/build.sh",
+    "predev": "node scripts/copy-engine.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "build": "npm run build:legacy && node scripts/copy-engine.mjs && vite build",
+    "build:legacy": "bash poc/build.sh",
     "test": "node poc/tests/engine.test.js",
-    "test:ui": "node poc/tests/ui.smoke.js"
+    "test:ui": "node poc/tests/react.smoke.js",
+    "test:legacy-ui": "node poc/tests/ui.smoke.js"
   },
-  "devDependencies": { "playwright": "^1.48.0" }
+  "devDependencies": {
+    "playwright": "^1.48.0",
+    "vite": "^8.3.5"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.12.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
 }
