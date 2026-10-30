@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulate: compare two Deploy configs · Loadbearing mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F49D1}a:hover{color:#1F33A3}
+</style>
+</head>
+<body>
+<div style="width: 100%; min-height: 960px; background: #F3F4F6; color: #15171C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13.5px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 20px; background: #FFFFFF; border-bottom: 1px solid #E2E4E9">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2F49D1" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 4v16"></path></svg>
+    <span style="font-weight: 700; font-size: 16px">Loadbearing</span>
+  </div>
+  <nav aria-label="Modes" style="display: flex; gap: 4px; margin: 0 auto; flex-wrap: wrap">
+    <a href="01-build-step-through.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">1</span><span style="font-weight: 600">Build</span></a>
+    <a href="02-deploy-aws.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">2</span><span style="font-weight: 600">Deploy</span></a>
+    <a href="06-simulate-compare.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px; background: #E9ECFC; border: 1px solid #B8C1F2"><span style="width: 24px; height: 24px; border-radius: 50%; background: #2F49D1; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">3</span><span style="font-weight: 600">Simulate</span></a>
+  </nav>
+</header>
+
+<main style="padding: 20px; display: flex; flex-direction: column; gap: 16px; max-width: 1240px; width: 100%; box-sizing: border-box; margin: 0 auto">
+  <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+    <h1 style="margin: 0; font-size: 21px">Checkout rush on three Deploy configs</h1>
+    <span style="color: #5B616E">Same Build, same scenario: 360,000 checkouts over 60 minutes, users 50% North America, 30% Europe, 20% Asia</span>
+    <span style="flex: 1"></span>
+    <button type="button" style="font: inherit; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 5px 11px">+ Add a Deploy</button>
+    <button type="button" style="font: inherit; font-weight: 600; background: #2F49D1; color: #FFFFFF; border: 0; border-radius: 8px; padding: 6px 14px">Run all again</button>
+  </div>
+
+  <div style="overflow-x: auto; background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px">
+    <table style="border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13px">
+      <thead><tr style="text-align: left"><th style="padding: 12px 14px; border-bottom: 1px solid #E2E4E9; width: 22%"></th>
+        <th style="padding: 12px 14px; border-bottom: 1px solid #E2E4E9"><div style="font-weight: 600">Monolith in one region</div><div style="font-size: 12px; color: #5B616E; font-weight: 400">Generic · us-east</div></th>
+        <th style="padding: 12px 14px; border-bottom: 1px solid #E2E4E9; background: #F5F6FE"><div style="font-weight: 600">Global · AWS</div><div style="font-size: 12px; color: #5B616E; font-weight: 400">us-east-1 + us-west-2 · Aurora DSQL</div></th>
+        <th style="padding: 12px 14px; border-bottom: 1px solid #E2E4E9"><div style="font-weight: 600">Global · Google Cloud</div><div style="font-size: 12px; color: #5B616E; font-weight: 400">us-central1 + europe-west1 · Spanner</div></th></tr></thead>
+      <tbody>
+        <tr><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; color: #5B616E">Meets the goal (99% within 800 ms)</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9"><span style="background: #E3F4E8; color: #157F3D; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">yes</span></td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; background: #F5F6FE"><span style="background: #E3F4E8; color: #157F3D; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">yes</span></td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9"><span style="background: #FDECEA; color: #B42318; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">no</span></td></tr>
+        <tr><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; color: #5B616E">Slowest 1%</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace">608 ms</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace; background: #F5F6FE">540 ms</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace; color: #B42318; font-weight: 600">910 ms</td></tr>
+        <tr><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; color: #5B616E">Slowest 1% for Asia</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace">760 ms</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace; background: #F5F6FE">720 ms</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace; color: #B42318; font-weight: 600">1.1 s</td></tr>
+        <tr><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; color: #5B616E">Max throughput before the goal breaks</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace">1,180/s</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace; background: #F5F6FE; font-weight: 600">3,900/s</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; font-family: 'IBM Plex Mono', monospace">2,700/s</td></tr>
+        <tr><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; color: #5B616E">First to fill up</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">main-db capacity</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; background: #F5F6FE">Lambda concurrency quota</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">GKE payments CPU</td></tr>
+        <tr><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; color: #5B616E">Losing one zone</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">8% fail for 2 min</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9; background: #F5F6FE">3% fail for 4 min</td><td style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">under 1% fail</td></tr>
+        <tr><td style="padding: 10px 14px; color: #5B616E">Cost per hour at this load</td><td style="padding: 10px 14px; font-family: 'IBM Plex Mono', monospace">$2.40</td><td style="padding: 10px 14px; font-family: 'IBM Plex Mono', monospace; background: #F5F6FE">$11.80</td><td style="padding: 10px 14px; font-family: 'IBM Plex Mono', monospace">$13.20</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="font-size: 12px; color: #5B616E">Sample results for layout. Prices from each catalog's price list, labeled with the date fetched.</div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px">
+    <section style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-size: 15px">Why Google Cloud is slower here</h2>
+      <p style="margin: 0; color: #3E434D">Writes to Checkouts wait for the Spanner leader in us-central1. European users pay the transatlantic round trip on two writes per checkout, and PaymentService runs only in us-central1.</p>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap"><a href="03-deploy-gcp.html" style="font-size: 12.5px">Run PaymentService in europe-west1</a><a href="03-deploy-gcp.html" style="font-size: 12.5px">Geo-partition Checkouts by customer</a></div>
+    </section>
+    <section style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-size: 15px">Why AWS stops at 3,900/s</h2>
+      <p style="margin: 0; color: #3E434D">Lambda Managed Instances reach the account's 1,000 concurrent executions in us-east-1 first. The compute itself has room; the limit is a quota you can ask to raise.</p>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap"><a href="02-deploy-aws.html" style="font-size: 12.5px">Plan a quota increase</a><a href="02-deploy-aws.html" style="font-size: 12.5px">Move CartService to EKS</a></div>
+    </section>
+  </div>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "loadbearing",
+  "private": true,
+  "description": "Learn system design by experiment: design logic, map it onto cloud infrastructure, simulate it at scale.",
+  "scripts": {
+    "build": "bash poc/build.sh",
+    "test": "node poc/tests/engine.test.js",
+    "test:ui": "node poc/tests/ui.smoke.js"
+  },
+  "devDependencies": { "playwright": "^1.48.0" }
+}

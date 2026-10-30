@@ -1,0 +1,355 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-checkout",
+  "name": "Checkout system",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "Storefront",
+      "x": 20,
+      "y": 60,
+      "code": "# Public API. Each \"when\" block is an endpoint.\nwhen Checkout {\n  call CartService.GetCart\n  if CartIsEmpty @4% {\n    error 400\n  }\n  read Customers by customer_id\n  insert Checkouts\n  call PaymentService.CreatePayment\n  if PaymentDeclined @6% {\n    update Checkouts\n    error 402\n  }\n  update Checkouts\n  publish OrderEvents\n}\n\nwhen ViewOrder {\n  read Checkouts by checkout_id\n  read Shipments by checkout_id\n}"
+    },
+    {
+      "id": "w2",
+      "name": "CartService",
+      "x": 290,
+      "y": 20,
+      "code": "when GetCart {\n  read Carts by customer_id\n  for each item in Cart ~4 {\n    read Products by product_id\n  }\n}"
+    },
+    {
+      "id": "w3",
+      "name": "PaymentService",
+      "x": 290,
+      "y": 170,
+      "code": "when CreatePayment {\n  parallel {\n    call FraudCheck.Score\n    read Payments by checkout_id\n  }\n  call PaymentGateway.Charge\n  insert Payments\n}"
+    },
+    {
+      "id": "w4",
+      "name": "FraudCheck",
+      "x": 290,
+      "y": 320,
+      "code": "when Score {\n  read Customers by customer_id\n  compute 12ms\n}"
+    },
+    {
+      "id": "w5",
+      "name": "PaymentGateway",
+      "x": 290,
+      "y": 450,
+      "external": true,
+      "code": "# Runs outside your system. Use \"compute\" for the\n# response time you expect from the provider.\nwhen Charge {\n  compute 180ms\n}"
+    },
+    {
+      "id": "w6",
+      "name": "Fulfillment",
+      "x": 290,
+      "y": 600,
+      "code": "when message OrderEvents {\n  read Checkouts by checkout_id\n  insert Shipments\n}"
+    },
+    {
+      "id": "w7",
+      "name": "ProductImport",
+      "x": 20,
+      "y": 400,
+      "code": "when file ProductFeeds {\n  for each row in file {\n    upsert Products\n  }\n}"
+    },
+    {
+      "id": "w8",
+      "name": "NightlyReport",
+      "x": 20,
+      "y": 660,
+      "code": "when schedule \"daily 02:00\" {\n  read Checkouts by status many 120k\n  insert Reports\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "Carts",
+      "kind": "kv",
+      "x": 560,
+      "y": 10,
+      "rows": 2000000,
+      "rowKB": 2,
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "key": true,
+          "ref": "Customers.customer_id"
+        },
+        {
+          "name": "items",
+          "type": "json"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "Products",
+      "kind": "table",
+      "x": 560,
+      "y": 120,
+      "rows": 500000,
+      "rowKB": 1,
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "price",
+          "type": "decimal"
+        },
+        {
+          "name": "stock",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "name": "Customers",
+      "kind": "table",
+      "x": 560,
+      "y": 300,
+      "rows": 20000000,
+      "rowKB": 0.5,
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "country",
+          "type": "char(2)"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp"
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "name": "Checkouts",
+      "kind": "table",
+      "x": 830,
+      "y": 20,
+      "rows": 400000000,
+      "rowKB": 1.5,
+      "fields": [
+        {
+          "name": "checkout_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "index": true,
+          "ref": "Customers.customer_id"
+        },
+        {
+          "name": "status",
+          "type": "text"
+        },
+        {
+          "name": "total",
+          "type": "decimal"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "index": true
+        }
+      ]
+    },
+    {
+      "id": "d5",
+      "name": "Payments",
+      "kind": "table",
+      "x": 560,
+      "y": 470,
+      "rows": 420000000,
+      "rowKB": 0.6,
+      "fields": [
+        {
+          "name": "payment_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "checkout_id",
+          "type": "uuid",
+          "index": true,
+          "ref": "Checkouts.checkout_id"
+        },
+        {
+          "name": "amount",
+          "type": "decimal"
+        },
+        {
+          "name": "status",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d6",
+      "name": "Shipments",
+      "kind": "table",
+      "x": 830,
+      "y": 230,
+      "rows": 380000000,
+      "rowKB": 0.4,
+      "fields": [
+        {
+          "name": "shipment_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "checkout_id",
+          "type": "uuid",
+          "index": true,
+          "ref": "Checkouts.checkout_id"
+        },
+        {
+          "name": "carrier",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d7",
+      "name": "OrderEvents",
+      "kind": "stream",
+      "x": 830,
+      "y": 400,
+      "rows": 0,
+      "rowKB": 0.5,
+      "partitionKey": "customer_id",
+      "fields": [
+        {
+          "name": "checkout_id",
+          "type": "uuid",
+          "ref": "Checkouts.checkout_id"
+        },
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "ref": "Customers.customer_id"
+        },
+        {
+          "name": "type",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d8",
+      "name": "ProductFeeds",
+      "kind": "file",
+      "x": 20,
+      "y": 520,
+      "rows": 1000000,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "ref": "Products.product_id"
+        },
+        {
+          "name": "price",
+          "type": "decimal"
+        },
+        {
+          "name": "stock",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "id": "d9",
+      "name": "Reports",
+      "kind": "blob",
+      "x": 830,
+      "y": 560,
+      "rows": 0,
+      "rowKB": 2000,
+      "fields": [
+        {
+          "name": "date",
+          "type": "date"
+        },
+        {
+          "name": "csv",
+          "type": "file"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc1",
+      "name": "Checkout rush",
+      "entry": "Storefront.Checkout",
+      "count": 360000,
+      "durationMin": 60,
+      "burst": "steady",
+      "origins": {
+        "na": 50,
+        "eu": 30,
+        "asia": 20
+      },
+      "odds": {},
+      "goalMs": 800
+    },
+    {
+      "id": "sc2",
+      "name": "Order lookups",
+      "entry": "Storefront.ViewOrder",
+      "count": 7200000,
+      "durationMin": 60,
+      "burst": "steady",
+      "origins": {
+        "na": 50,
+        "eu": 30,
+        "asia": 20
+      },
+      "odds": {},
+      "goalMs": 150
+    },
+    {
+      "id": "sc3",
+      "name": "Product feed import",
+      "entry": "ProductImport.file ProductFeeds",
+      "rows": 1000000,
+      "goalMin": 30,
+      "origins": {},
+      "odds": {}
+    },
+    {
+      "id": "sc4",
+      "name": "Nightly report",
+      "entry": "NightlyReport.schedule daily 02:00",
+      "rows": 1,
+      "goalMin": 10,
+      "origins": {},
+      "odds": {}
+    }
+  ]
+}

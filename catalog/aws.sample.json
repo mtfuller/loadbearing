@@ -1,0 +1,74 @@
+{
+  "$comment": "Sample entries in the v1 provider catalog format (design doc section 11). Not loaded by the POC yet. Facts checked 2026-10-29; every limit carries its source. Prices are filled from the AWS Price List API at build time, not typed here.",
+  "provider": "aws",
+  "version": "2026-10-29",
+  "products": [
+    {
+      "id": "dynamodb",
+      "label": "DynamoDB",
+      "category": "store",
+      "status": "ga",
+      "fits": { "kv": "native", "document": "native", "table": ["works", "Only key lookups are cheap; lookups by other fields need a global secondary index."] },
+      "net": "public",
+      "partitioning": "auto",
+      "modes": {
+        "single-region": { "repl": "single" },
+        "global-eventual": { "repl": "multi-primary", "note": "Last writer wins when two regions change the same item." },
+        "global-strong": { "repl": "consensus", "regions": ["us-east-1", "us-east-2", "us-west-2", "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3"], "note": "Multi-Region strong consistency, RPO zero.", "source": "https://aws.amazon.com/about-aws/whats-new/2025/06/amazon-dynamo-db-global-tables-multi-region-strong-consistency-generally-available/" }
+      },
+      "latency": { "read": [3, 10], "write": [5, 16], "$comment": "median and p99 in ms; model assumptions, to be sanity-checked" },
+      "limits": [],
+      "pricing": { "source": "price-list-api" },
+      "concepts": ["partition key", "global secondary index", "last writer wins", "strong vs eventual consistency"],
+      "regions": "*"
+    },
+    {
+      "id": "aurora-dsql",
+      "label": "Aurora DSQL",
+      "category": "store",
+      "status": "ga",
+      "fits": { "table": "native", "kv": ["works", "A two-column table."], "document": ["works", "JSON columns."] },
+      "net": "public",
+      "partitioning": "auto",
+      "modes": {
+        "single-region": { "repl": "single", "availability": "99.99%" },
+        "multi-region": { "repl": "consensus", "peers": 2, "witness": true, "availability": "99.999%", "regions": ["us-east-1", "us-east-2", "us-west-2"], "note": "Two peered regions take reads and writes; a third log-only witness region has no endpoint.", "source": "https://aws.amazon.com/blogs/aws/amazon-aurora-dsql-is-now-generally-available" }
+      },
+      "latency": { "read": [2, 9], "write": [5, 20] },
+      "limits": [],
+      "pricing": { "source": "price-list-api", "unit": "DPU + GB-month" },
+      "concepts": ["consensus", "witness region", "optimistic concurrency"],
+      "regions": ["us-east-1", "us-east-2", "us-west-2", "ap-northeast-1", "ap-northeast-3", "eu-west-1", "eu-west-2", "eu-west-3"]
+    },
+    {
+      "id": "lambda",
+      "label": "Lambda",
+      "category": "compute",
+      "status": "ga",
+      "kind": "fn",
+      "net": "public",
+      "options": { "vpc": true, "memoryMB": [128, 10240] },
+      "limits": [
+        { "id": "concurrency", "value": 1000, "unit": "concurrent executions per region", "raisable": true, "source": "https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html" },
+        { "id": "scale-rate", "value": 1000, "unit": "new execution environments per 10 s per function", "raisable": false, "source": "https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html" },
+        { "id": "timeout", "value": 900, "unit": "s", "raisable": false, "source": "https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html" }
+      ],
+      "coldStartMs": [250, 900],
+      "concepts": ["cold start", "concurrency quota", "burst scaling"],
+      "regions": "*"
+    },
+    {
+      "id": "api-gateway",
+      "label": "API Gateway",
+      "category": "entry",
+      "status": "ga",
+      "limits": [
+        { "id": "account-rps", "value": 10000, "unit": "requests/s per account per region, shared by all APIs", "raisable": true, "exceptions": { "value": 2500, "regions": ["af-south-1", "eu-south-1", "ap-southeast-3", "me-central-1", "ap-south-2", "ap-southeast-4", "eu-south-2", "eu-central-2", "il-central-1", "ca-west-1", "ap-southeast-5", "ap-southeast-7", "mx-central-1"] }, "source": "https://docs.aws.amazon.com/us_en/apigateway/latest/developerguide/limits.html" },
+        { "id": "burst", "value": 5000, "unit": "requests (token bucket)", "raisable": false, "source": "https://docs.aws.amazon.com/us_en/apigateway/latest/developerguide/limits.html" }
+      ],
+      "latencyMs": 6,
+      "concepts": ["rate limiting", "token bucket", "shared quotas"],
+      "regions": "*"
+    }
+  ]
+}

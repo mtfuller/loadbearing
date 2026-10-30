@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deploy on Google Cloud · Loadbearing mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F49D1}a:hover{color:#1F33A3}
+</style>
+</head>
+<body>
+<div style="width: 100%; min-height: 960px; background: #F3F4F6; color: #15171C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13.5px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 20px; background: #FFFFFF; border-bottom: 1px solid #E2E4E9">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2F49D1" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 4v16"></path></svg>
+    <span style="font-weight: 700; font-size: 16px">Loadbearing</span>
+  </div>
+  <nav aria-label="Modes" style="display: flex; gap: 4px; margin: 0 auto; flex-wrap: wrap">
+    <a href="01-build-step-through.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">1</span><span style="font-weight: 600">Build</span></a>
+    <a href="03-deploy-gcp.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px; background: #E9ECFC; border: 1px solid #B8C1F2"><span style="width: 24px; height: 24px; border-radius: 50%; background: #2F49D1; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">2</span><span><span style="display: block; font-weight: 600">Deploy</span><span style="display: block; font-size: 11.5px; color: #157F3D">Works · 1 note</span></span></a>
+    <a href="06-simulate-compare.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">3</span><span style="font-weight: 600">Simulate</span></a>
+  </nav>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; flex: 1">
+  <main style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; background: #F8F9FB; border-bottom: 1px solid #E2E4E9">
+      <div role="group" aria-label="Provider" style="display: inline-flex; background: #E9EAEE; border-radius: 9px; padding: 3px; gap: 2px">
+        <a href="01-build-step-through.html" style="text-decoration: none; color: #3E434D; padding: 4px 12px; border-radius: 7px">Generic</a>
+        <a href="02-deploy-aws.html" style="text-decoration: none; color: #3E434D; padding: 4px 12px; border-radius: 7px">AWS</a>
+        <a href="03-deploy-gcp.html" style="text-decoration: none; color: #15171C; padding: 4px 12px; border-radius: 7px; background: #FFFFFF; font-weight: 600">Google Cloud</a>
+      </div>
+      <span style="font-size: 12.5px; color: #5B616E">Google Cloud catalog · checked Oct 29, 2026 · converted from “Global · AWS”, 2 items to review</span>
+      <span style="flex: 1"></span>
+      <a href="04-deploy-catalog.html" style="text-decoration: none; background: #2F49D1; color: #FFFFFF; font-weight: 600; border-radius: 8px; padding: 6px 12px">+ Add from catalog</a>
+    </div>
+
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; background: #FFFFFF; border: 1px dashed #C9CDD5; border-radius: 12px">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">USERS</span>
+        <span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">North America 50%</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Europe 30%</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Asia 20%</span>
+        <span style="flex: 1"></span>
+        <span style="border: 2px solid #2F49D1; border-radius: 999px; padding: 3px 12px; font-weight: 600; background: #E9ECFC; color: #1F33A3">Global external Application Load Balancer · one anycast IP</span>
+      </div>
+
+      <div style="border: 1.5px dashed #B8C1F2; border-radius: 16px; padding: 12px; background: #F5F6FE; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #1F33A3">GLOBAL VPC · prod-net</span><span style="font-size: 12.5px; color: #3E434D">One network across regions; subnets are regional. Private traffic between regions needs no peering.</span></div>
+        <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start">
+          <section aria-label="us-central1" style="flex: 1 1 380px; background: #FFFFFF; border: 1.5px solid #C9CDD5; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #2F49D1"></span><span style="font-weight: 600">us-central1</span><span style="color: #5B616E">Iowa · subnet 10.10.0.0/20</span></div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+              <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">Cloud Run service</div><div style="font-size: 12px; color: #5B616E">storefront · 80 requests per instance · min 2</div></div>
+              <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">GKE Autopilot</div><div style="font-size: 12px; color: #5B616E">payments · PaymentService, FraudCheck</div></div>
+              <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">Cloud Run worker pool</div><div style="font-size: 12px; color: #5B616E">Fulfillment · pulls from Pub/Sub</div></div>
+              <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">Cloud Run job</div><div style="font-size: 12px; color: #5B616E">ProductImport · 50 tasks</div></div>
+              <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">Memorystore for Valkey</div><div style="font-size: 12px; color: #5B616E">Carts · 3 shards</div></div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap"><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Cloud NAT</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Private Service Connect</span></div>
+          </section>
+          <section aria-label="europe-west1" style="flex: 1 1 300px; background: #FFFFFF; border: 1.5px solid #C9CDD5; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #2F49D1"></span><span style="font-weight: 600">europe-west1</span><span style="color: #5B616E">Belgium · subnet 10.20.0.0/20</span></div>
+            <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">Cloud Run service</div><div style="font-size: 12px; color: #5B616E">storefront · 80 requests per instance · min 2</div></div>
+            <div style="border: 1px dashed #B42318; border-radius: 10px; padding: 8px; background: #FDECEA"><div style="font-weight: 600">PaymentService</div><div style="font-size: 12px; color: #8C1D13">runs only in us-central1; calls cross the Atlantic</div></div>
+            <span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px; align-self: flex-start">Cloud NAT</span>
+          </section>
+        </div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">MULTI-REGION AND GLOBAL SERVICES</div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+        <div style="border: 2px solid #2F49D1; border-radius: 10px; padding: 8px; background: #FFFFFF; box-shadow: 0 0 0 4px #E9ECFC"><div style="font-weight: 600">Spanner</div><div style="font-size: 12px; color: #5B616E">Enterprise Plus · multi-region · leader us-central1</div><div style="margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">Checkouts · Payments · Customers</div></div>
+        <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px; background: #FFFFFF"><div style="font-weight: 600">Pub/Sub</div><div style="font-size: 12px; color: #5B616E">global topic · ordering key customer_id</div><div style="margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">OrderEvents</div></div>
+        <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px; background: #FFFFFF"><div style="font-weight: 600">Cloud Scheduler</div><div style="font-size: 12px; color: #5B616E">daily 02:00 → NightlyReport</div></div>
+        <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px; background: #FFFFFF"><div style="font-weight: 600">Cloud Storage</div><div style="font-size: 12px; color: #5B616E">dual-region · Eventarc on upload</div><div style="margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">ProductFeeds · Reports</div></div>
+      </div>
+    </div>
+
+    <section aria-label="Conversion review" style="margin-top: auto; background: #FFFFFF; border-top: 1px solid #E2E4E9; padding: 10px 16px; display: flex; flex-direction: column; gap: 6px">
+      <div style="font-weight: 600">Converted from AWS: review 2 choices</div>
+      <div style="display: flex; gap: 10px; align-items: center; font-size: 13px; flex-wrap: wrap"><span style="flex: 1 1 400px">Aurora DSQL → Spanner Enterprise Plus. Multi-region needs this edition; it also allows geo-partitioning.</span><button type="button" style="font: inherit; font-size: 12.5px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 3px 10px">Keep</button><button type="button" style="font: inherit; font-size: 12.5px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 3px 10px">Choose another</button></div>
+      <div style="display: flex; gap: 10px; align-items: center; font-size: 13px; flex-wrap: wrap"><span style="flex: 1 1 400px">SQS fair queue → Pub/Sub with ordering keys. Pub/Sub has no per-tenant fairness; one busy customer can slow others.</span><button type="button" style="font: inherit; font-size: 12.5px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 3px 10px">Keep</button><button type="button" style="font: inherit; font-size: 12.5px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 3px 10px">Use Cloud Tasks</button></div>
+    </section>
+  </main>
+
+  <aside aria-label="Inspector" style="flex: 1 1 340px; max-width: 400px; background: #FFFFFF; border-left: 1px solid #E2E4E9; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px">
+    <div><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">STORE · GOOGLE CLOUD</div><div style="font-size: 18px; font-weight: 600">Spanner</div><div style="font-size: 12.5px; color: #3E434D">Globally consistent relational database. The edition decides which configurations you can pick.</div></div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 600">Edition</span>
+      <label style="display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid #D3D6DD; border-radius: 8px; color: #5B616E"><input type="radio" name="ed" disabled><span><b style="color: #3E434D">Standard</b><br>Regional only. Not available with multi-region.</span></label>
+      <label style="display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid #D3D6DD; border-radius: 8px; color: #5B616E"><input type="radio" name="ed" disabled><span><b style="color: #3E434D">Enterprise</b><br>Regional, read replicas, columnar engine.</span></label>
+      <label style="display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid #2F49D1; background: #E9ECFC; border-radius: 8px"><input type="radio" name="ed" checked><span><b>Enterprise Plus</b><br>Dual- and multi-region, geo-partitioning, up to 99.999%.</span></label>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 600">Configuration</span><div style="display: flex; gap: 4px; flex-wrap: wrap"><span style="padding: 4px 10px; border: 1px solid #D3D6DD; border-radius: 8px">Regional</span><span style="padding: 4px 10px; border: 1px solid #D3D6DD; border-radius: 8px">Dual-region</span><span style="padding: 4px 10px; border: 1px solid #2F49D1; background: #E9ECFC; color: #1F33A3; font-weight: 600; border-radius: 8px">Multi-region</span></div></div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 600">Split data by</span>
+      <label style="display: flex; gap: 8px; align-items: center"><span style="flex: 1; font-family: 'IBM Plex Mono', monospace">Checkouts</span><select style="font: inherit; padding: 3px 6px; border: 1px solid #D3D6DD; border-radius: 7px"><option>checkout_id</option></select></label>
+      <label style="display: flex; gap: 8px; align-items: center"><span style="flex: 1; font-family: 'IBM Plex Mono', monospace">Customers</span><select style="font: inherit; padding: 3px 6px; border: 1px solid #D3D6DD; border-radius: 7px"><option>customer_id</option></select></label>
+      <span style="font-size: 12.5px; color: #3E434D">Geo-partitioning: keep each customer's rows in the region nearest them.</span>
+    </div>
+    <div style="font-size: 12px; color: #5B616E">Catalog entry: GA · checked Oct 29, 2026 · <a href="04-deploy-catalog.html">source</a></div>
+  </aside>
+</div>
+</div>
+</body>
+</html>
