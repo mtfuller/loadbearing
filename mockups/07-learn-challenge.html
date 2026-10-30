@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Learn: guided challenge · Loadbearing mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F49D1}a:hover{color:#1F33A3}
+</style>
+</head>
+<body>
+<div style="width: 100%; min-height: 960px; background: #F3F4F6; color: #15171C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13.5px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 20px; background: #FFFFFF; border-bottom: 1px solid #E2E4E9">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2F49D1" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 4v16"></path></svg>
+    <span style="font-weight: 700; font-size: 16px">Loadbearing</span>
+  </div>
+  <span style="background: #E9ECFC; color: #1F33A3; border: 1px solid #B8C1F2; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 600">Challenge 3 of 8 · Resilience</span>
+  <nav aria-label="Modes" style="display: flex; gap: 4px; margin: 0 auto; flex-wrap: wrap">
+    <a href="01-build-step-through.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">1</span><span><span style="display: block; font-weight: 600">Build</span><span style="display: block; font-size: 11.5px; color: #5B616E">locked by challenge</span></span></a>
+    <a href="02-deploy-aws.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px; background: #E9ECFC; border: 1px solid #B8C1F2"><span style="width: 24px; height: 24px; border-radius: 50%; background: #2F49D1; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">2</span><span><span style="display: block; font-weight: 600">Deploy</span><span style="display: block; font-size: 11.5px; color: #157F3D">your move</span></span></a>
+    <a href="05-simulate-watch.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">3</span><span style="font-weight: 600">Simulate</span></a>
+  </nav>
+  <button type="button" style="font: inherit; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 5px 11px">All challenges</button>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; flex: 1">
+  <aside aria-label="Challenge" style="flex: 1 1 340px; max-width: 400px; background: #FFFFFF; border-right: 1px solid #E2E4E9; padding: 18px 20px; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h1 style="margin: 0; font-size: 21px; line-height: 1.25">Keep checkout up when a zone goes down</h1>
+      <p style="margin: 0; color: #3E434D; line-height: 1.5">This store runs in one region. At minute 22, zone us-east-1b fails. Change only the Deploy so customers barely notice.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">GOALS · CHECKED ON EVERY RUN</span>
+      <div style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: #E3F4E8"><span aria-hidden="true" style="color: #157F3D; font-weight: 700">✓</span><span style="flex: 1">Failures under 1% during the outage</span><span style="font-family: 'IBM Plex Mono', monospace; color: #157F3D">0.4%</span></div>
+      <div style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: #FDECEA"><span aria-hidden="true" style="color: #B42318; font-weight: 700">✕</span><span style="flex: 1">Slowest 1% stays under 800 ms</span><span style="font-family: 'IBM Plex Mono', monospace; color: #B42318">1.1 s</span></div>
+      <div style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: #E3F4E8"><span aria-hidden="true" style="color: #157F3D; font-weight: 700">✓</span><span style="flex: 1">Costs under $15 an hour</span><span style="font-family: 'IBM Plex Mono', monospace; color: #157F3D">$9.20</span></div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">HINTS</span>
+      <details open style="border: 1px solid #E2E4E9; border-radius: 10px; padding: 8px 10px"><summary style="cursor: pointer; font-weight: 600">Hint 1 · Where did the time go?</summary><p style="margin: 6px 0 0; color: #3E434D; line-height: 1.5">Step through one request at minute 23. Most of the extra time is waiting for CPU in the zones that are left.</p></details>
+      <details style="border: 1px solid #E2E4E9; border-radius: 10px; padding: 8px 10px"><summary style="cursor: pointer; font-weight: 600">Hint 2 · Headroom</summary></details>
+      <details style="border: 1px solid #E2E4E9; border-radius: 10px; padding: 8px 10px"><summary style="cursor: pointer; font-weight: 600">Show a solution</summary></details>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">CONCEPTS IN THIS CHALLENGE</span>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap"><button type="button" style="font: inherit; font-size: 12.5px; background: #F3F4F6; border: 0; border-radius: 999px; padding: 4px 10px">Availability zones</button><button type="button" style="font: inherit; font-size: 12.5px; background: #F3F4F6; border: 0; border-radius: 999px; padding: 4px 10px">N+1 headroom</button><button type="button" style="font: inherit; font-size: 12.5px; background: #F3F4F6; border: 0; border-radius: 999px; padding: 4px 10px">Autoscaling lag</button><button type="button" style="font: inherit; font-size: 12.5px; background: #F3F4F6; border: 0; border-radius: 999px; padding: 4px 10px">Queueing at high utilization</button></div>
+    </div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+      <h2 style="margin: 0; font-size: 17px">Your last two runs</h2>
+      <span style="color: #5B616E">Same Build, same scenario, one Deploy change between them</span>
+      <span style="flex: 1"></span>
+      <button type="button" style="font: inherit; font-weight: 600; background: #2F49D1; color: #FFFFFF; border: 0; border-radius: 8px; padding: 7px 14px">Run again</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+      <section style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between"><span style="font-weight: 600">Run 1 · starting design</span><span style="color: #5B616E; font-size: 12.5px">3 pods minimum</span></div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+          <div><div style="font-size: 11px; color: #5B616E; font-weight: 600">FAILURES</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; color: #B42318">8.2%</div></div>
+          <div><div style="font-size: 11px; color: #5B616E; font-weight: 600">SLOWEST 1%</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; color: #B42318">2.4 s</div></div>
+          <div><div style="font-size: 11px; color: #5B616E; font-weight: 600">COST</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px">$6.10/h</div></div>
+        </div>
+      </section>
+      <section style="background: #FFFFFF; border: 2px solid #2F49D1; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 0 0 4px #E9ECFC">
+        <div style="display: flex; justify-content: space-between"><span style="font-weight: 600">Run 2 · after your change</span><span style="color: #5B616E; font-size: 12.5px">6 pods minimum</span></div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+          <div><div style="font-size: 11px; color: #5B616E; font-weight: 600">FAILURES</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; color: #157F3D">0.4%</div></div>
+          <div><div style="font-size: 11px; color: #5B616E; font-weight: 600">SLOWEST 1%</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; color: #B42318">1.1 s</div></div>
+          <div><div style="font-size: 11px; color: #5B616E; font-weight: 600">COST</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px">$9.20/h</div></div>
+        </div>
+      </section>
+    </div>
+
+    <section aria-label="What changed and why" style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px">What changed, and why it helped</h2>
+      <div style="display: flex; gap: 10px; align-items: flex-start"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #F3F4F6; border-radius: 6px; padding: 2px 6px; white-space: nowrap">app-cluster · fewest pods 3 → 6</span><span style="color: #3E434D; line-height: 1.5">With 6 pods across 3 zones, the 4 left after losing one zone run at about 75% CPU instead of 130%, so requests stopped being dropped.</span></div>
+      <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #FFF8E8"><span style="font-weight: 600; color: #8A5A00; white-space: nowrap">Still missing</span><span style="color: #3E434D; line-height: 1.5">Slowest 1% is 1.1 s for the first 3 minutes after the failure. At 75% busy, requests queue for CPU while new pods start. Look at how long scaling takes, or how busy the remaining zones are allowed to get.</span></div>
+    </section>
+
+    <section aria-label="Timeline" style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 14px 16px">
+      <svg viewBox="0 0 760 130" style="width: 100%; height: auto; display: block" role="img" aria-label="Run 2 recovers faster than run 1 after the zone fails">
+        <line x1="40" x2="740" y1="46" y2="46" stroke="#B42318" stroke-dasharray="4 4"></line>
+        <text x="740" y="40" text-anchor="end" font-size="11" fill="#B42318" font-family="IBM Plex Sans">goal 800 ms</text>
+        <path d="M40 96 L290 95 L300 18 L360 16 L420 40 L470 70 L520 92 L740 94" fill="none" stroke="#9AA0AC" stroke-width="2" stroke-dasharray="5 4"></path>
+        <path d="M40 98 L290 97 L300 36 L330 40 L360 72 L390 92 L740 96" fill="none" stroke="#2F49D1" stroke-width="2.4"></path>
+        <line x1="296" x2="296" y1="8" y2="112" stroke="#B42318" stroke-width="1.5"></line>
+        <text x="302" y="14" font-size="11" fill="#8C1D13" font-family="IBM Plex Sans">zone lost · 22:00</text>
+        <text x="40" y="126" font-size="11" fill="#5B616E" font-family="IBM Plex Sans">0:00</text><text x="740" y="126" text-anchor="end" font-size="11" fill="#5B616E" font-family="IBM Plex Sans">1:00:00</text>
+        <text x="560" y="86" font-size="11" fill="#2F49D1" font-family="IBM Plex Sans">run 2</text><text x="560" y="112" font-size="11" fill="#5B616E" font-family="IBM Plex Sans">run 1 (dashed)</text>
+      </svg>
+    </section>
+  </main>
+</div>
+</div>
+</body>
+</html>

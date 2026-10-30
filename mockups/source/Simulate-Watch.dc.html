@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Simulate: watch it run and lose a zone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F49D1}a:hover{color:#1F33A3}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 960px; background: #F3F4F6; color: #15171C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13.5px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 20px; background: #FFFFFF; border-bottom: 1px solid #E2E4E9">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2F49D1" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 4v16"></path></svg>
+    <span style="font-weight: 700; font-size: 16px">Loadbearing</span>
+  </div>
+  <nav aria-label="Modes" style="display: flex; gap: 4px; margin: 0 auto; flex-wrap: wrap">
+    <a href="Main.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">1</span><span style="font-weight: 600">Build</span></a>
+    <a href="Deploy-AWS.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">2</span><span style="font-weight: 600">Deploy</span></a>
+    <a href="Simulate-Watch.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px; background: #E9ECFC; border: 1px solid #B8C1F2"><span style="width: 24px; height: 24px; border-radius: 50%; background: #2F49D1; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">3</span><span style="font-weight: 600">Simulate</span></a>
+  </nav>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; flex: 1">
+  <main style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; background: #FFFFFF; border-bottom: 1px solid #E2E4E9">
+      <button type="button" style="font: inherit; font-weight: 600; background: #2F49D1; color: #FFFFFF; border: 0; border-radius: 8px; padding: 6px 14px">❚❚ Pause</button>
+      <div style="flex: 1 1 260px; position: relative; height: 24px; display: flex; align-items: center" aria-label="Time in scenario">
+        <div style="position: absolute; left: 0; right: 0; height: 6px; background: #E2E4E9; border-radius: 3px"></div>
+        <div style="position: absolute; left: 0; width: 41%; height: 6px; background: #2F49D1; border-radius: 3px"></div>
+        <div style="position: absolute; left: 36.6%; width: 2px; height: 18px; background: #B42318"></div>
+        <div style="position: absolute; left: 66.6%; width: 2px; height: 18px; background: #8A5A00"></div>
+        <div style="position: absolute; left: calc(41% - 8px); width: 16px; height: 16px; border-radius: 50%; background: #FFFFFF; border: 2px solid #2F49D1"></div>
+      </div>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px">24:36 / 1:00:00</span>
+      <span style="display: flex; gap: 4px"><span style="padding: 3px 8px; border: 1px solid #D3D6DD; border-radius: 8px; font-size: 12px">1×</span><span style="padding: 3px 8px; border: 1px solid #2F49D1; background: #E9ECFC; color: #1F33A3; border-radius: 8px; font-size: 12px; font-weight: 600">4×</span></span>
+    </div>
+
+    <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; gap: 10px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #B42318; box-shadow: 0 0 0 4px #FDECEA"></span><span style="font-size: 16px; font-weight: 600">us-east-1b went down at 22:00. Traffic moved to 1a and 1c; EKS is scaling out to cover it.</span></div>
+      <section aria-label="us-east-1 by zone" style="background: #FFFFFF; border: 1.5px solid #C9CDD5; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-weight: 600">us-east-1 <span style="color: #5B616E; font-weight: 400">by zone</span></div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+          <div style="border: 1px solid #D9DDF7; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; font-weight: 600; color: #5B616E">us-east-1a</span>
+            <div style="display: flex; justify-content: space-between; border: 1.5px solid #8A5A00; border-radius: 8px; padding: 6px 8px; background: #FFF8E8"><span>EKS nodes</span><span style="font-family: 'IBM Plex Mono', monospace; color: #8A5A00">88% · 5 pods +2</span></div>
+            <div style="display: flex; justify-content: space-between; border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px"><span>Lambda MI</span><span style="font-family: 'IBM Plex Mono', monospace; color: #157F3D">61%</span></div>
+            <div style="display: flex; justify-content: space-between; border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px"><span>Valkey primary</span><span style="font-family: 'IBM Plex Mono', monospace; color: #157F3D">34%</span></div>
+          </div>
+          <div style="border: 1.5px dashed #B42318; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; background: #FDECEA"><span style="font-size: 12px; font-weight: 600; color: #8C1D13">us-east-1b · down since 22:00</span>
+            <div style="border: 1px dashed #D99A93; border-radius: 8px; padding: 6px 8px; color: #8C1D13">EKS nodes · 0 pods</div>
+            <div style="border: 1px dashed #D99A93; border-radius: 8px; padding: 6px 8px; color: #8C1D13">Lambda MI · 0</div>
+            <div style="border: 1px dashed #D99A93; border-radius: 8px; padding: 6px 8px; color: #8C1D13">Valkey replica · lost</div>
+          </div>
+          <div style="border: 1px solid #D9DDF7; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; font-weight: 600; color: #5B616E">us-east-1c</span>
+            <div style="display: flex; justify-content: space-between; border: 1.5px solid #B42318; border-radius: 8px; padding: 6px 8px; background: #FDECEA"><span>EKS nodes</span><span style="font-family: 'IBM Plex Mono', monospace; color: #B42318">104% · 4 pods +3</span></div>
+            <div style="display: flex; justify-content: space-between; border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px"><span>Lambda MI</span><span style="font-family: 'IBM Plex Mono', monospace; color: #157F3D">58%</span></div>
+            <div style="border: 1px dashed #9AA0AC; border-radius: 8px; padding: 6px 8px; color: #5B616E">no cache replica</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap"><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Aurora DSQL 47%</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">DynamoDB 22%</span><span style="border: 1.5px solid #8A5A00; border-radius: 999px; padding: 3px 10px; background: #FFF8E8">SQS backlog 12,400</span></div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px">
+        <div style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 10px 12px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">LOAD NOW</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 19px">104/s</div></div>
+        <div style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 10px 12px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">TYPICAL</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 19px">352 ms</div></div>
+        <div style="background: #FDECEA; border: 1px solid #B42318; border-radius: 12px; padding: 10px 12px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8C1D13">SLOWEST 1%</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 19px">1.4 s</div></div>
+        <div style="background: #FDECEA; border: 1px solid #B42318; border-radius: 12px; padding: 10px 12px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8C1D13">FAILURES</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 19px">3.1%</div></div>
+      </div>
+
+      <div style="background: #FFFFFF; border: 1px solid #E2E4E9; border-radius: 12px; padding: 12px 14px">
+        <svg viewBox="0 0 760 140" style="width: 100%; height: auto; display: block" role="img" aria-label="Slowest 1 percent jumps when the zone is lost and recovers as pods start">
+          <line x1="40" x2="740" y1="40" y2="40" stroke="#B42318" stroke-dasharray="4 4"></line>
+          <text x="740" y="34" text-anchor="end" font-size="11" fill="#B42318" font-family="IBM Plex Sans">goal 800 ms</text>
+          <path d="M40 92 L120 90 L200 93 L280 91 L296 30 L330 24 L360 52 L380 70 L400 84" fill="none" stroke="#2F49D1" stroke-width="2.2"></path>
+          <line x1="296" x2="296" y1="10" y2="120" stroke="#B42318" stroke-width="1.5"></line>
+          <text x="302" y="18" font-size="11" fill="#8C1D13" font-family="IBM Plex Sans">zone lost</text>
+          <line x1="506" x2="506" y1="10" y2="120" stroke="#8A5A00" stroke-width="1.5" stroke-dasharray="3 3"></line>
+          <text x="512" y="18" font-size="11" fill="#8A5A00" font-family="IBM Plex Sans">gateway slows (planned)</text>
+          <line x1="400" x2="400" y1="6" y2="124" stroke="#15171C" stroke-width="1.5"></line>
+          <text x="40" y="136" font-size="11" fill="#5B616E" font-family="IBM Plex Sans">0:00</text><text x="740" y="136" text-anchor="end" font-size="11" fill="#5B616E" font-family="IBM Plex Sans">1:00:00</text>
+        </svg>
+      </div>
+    </div>
+  </main>
+
+  <aside aria-label="Failures and events" style="flex: 1 1 340px; max-width: 400px; background: #FFFFFF; border-left: 1px solid #E2E4E9; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px"><span style="font-weight: 600">What goes wrong in this run</span>
+      <div style="display: flex; gap: 8px; align-items: center; border: 1px solid #E2E4E9; border-radius: 10px; padding: 8px 10px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #B42318"></span><span style="flex: 1">Lose zone us-east-1b</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">at 22:00</span></div>
+      <div style="display: flex; gap: 8px; align-items: center; border: 1px solid #E2E4E9; border-radius: 10px; padding: 8px 10px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #8A5A00"></span><span style="flex: 1">PaymentGateway slows to 2 s</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">at 40:00</span></div>
+      <button type="button" style="font: inherit; align-self: flex-start; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 5px 11px">+ Add a failure</button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 600">What happened</span>
+      <ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px">
+        <li style="display: flex; gap: 10px; border-left: 3px solid #B42318; padding: 4px 8px"><span style="font-family: 'IBM Plex Mono', monospace; color: #5B616E; width: 44px">24:10</span><span>EKS in 1c over capacity (104% CPU)</span></li>
+        <li style="display: flex; gap: 10px; border-left: 3px solid #2F49D1; padding: 4px 8px"><span style="font-family: 'IBM Plex Mono', monospace; color: #5B616E; width: 44px">23:15</span><span>EKS scaled out: 6 → 9 pods across 1a and 1c</span></li>
+        <li style="display: flex; gap: 10px; border-left: 3px solid #8A5A00; padding: 4px 8px"><span style="font-family: 'IBM Plex Mono', monospace; color: #5B616E; width: 44px">22:40</span><span>SQS backlog growing: Fulfillment lost a third of its workers</span></li>
+        <li style="display: flex; gap: 10px; border-left: 3px solid #B42318; padding: 4px 8px"><span style="font-family: 'IBM Plex Mono', monospace; color: #5B616E; width: 44px">22:00</span><span>us-east-1b lost; Valkey replica gone, primary in 1a keeps serving</span></li>
+        <li style="display: flex; gap: 10px; border-left: 3px solid #157F3D; padding: 4px 8px"><span style="font-family: 'IBM Plex Mono', monospace; color: #5B616E; width: 44px">00:00</span><span>Start: 102/s, all zones healthy</span></li>
+      </ol>
+    </div>
+    <div style="border: 1px solid #E2E4E9; border-radius: 10px; padding: 10px; background: #F8F9FB; display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 600">Suggested fix</span><span style="font-size: 12.5px; color: #3E434D">Keep 50% headroom per zone (min 6 pods) so two zones can carry all traffic while new pods start.</span><a href="Deploy-AWS.dc.html" style="font-size: 12.5px">Open in Deploy</a></div>
+  </aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

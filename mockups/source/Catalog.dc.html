@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Choose a product from the catalog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F49D1}a:hover{color:#1F33A3}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 960px; background: #5E626B; color: #15171C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13.5px; display: flex; justify-content: center; align-items: flex-start; padding: 48px 16px; box-sizing: border-box">
+<div role="dialog" aria-label="Choose a store for Checkouts" style="width: 100%; max-width: 1180px; background: #FFFFFF; border-radius: 16px; box-shadow: 0 24px 64px rgba(10,12,20,0.35); display: flex; flex-direction: column; overflow: hidden">
+  <div style="padding: 18px 22px; border-bottom: 1px solid #E2E4E9; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 12px"><h1 style="margin: 0; font-size: 20px">Where should <span style="font-family: 'IBM Plex Mono', monospace">Checkouts</span> live?</h1><span style="flex: 1"></span><a href="Deploy-AWS.dc.html" aria-label="Close" style="text-decoration: none; color: #3E434D; font-size: 20px">✕</a></div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><span style="font-size: 12.5px; color: #5B616E">What the Build needs, read from the code:</span>
+      <span style="background: #F3F4F6; border-radius: 999px; padding: 3px 10px; font-size: 12.5px">table with a key</span>
+      <span style="background: #F3F4F6; border-radius: 999px; padding: 3px 10px; font-size: 12.5px">read by checkout_id and by customer_id</span>
+      <span style="background: #F3F4F6; border-radius: 999px; padding: 3px 10px; font-size: 12.5px">written from us-east-1 and us-west-2</span>
+      <span style="background: #F3F4F6; border-radius: 999px; padding: 3px 10px; font-size: 12.5px">120k-row scan nightly</span>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+      <div role="group" aria-label="Provider" style="display: inline-flex; background: #E9EAEE; border-radius: 9px; padding: 3px; gap: 2px"><span style="padding: 4px 12px; border-radius: 7px; background: #FFFFFF; font-weight: 600">AWS</span><span style="padding: 4px 12px; border-radius: 7px">Google Cloud</span><span style="padding: 4px 12px; border-radius: 7px">Both</span></div>
+      <label style="display: flex; gap: 6px; align-items: center"><input type="checkbox" checked> Only products that can take writes in both regions</label>
+      <label style="display: flex; gap: 6px; align-items: center"><input type="checkbox"> Include preview products</label>
+      <span style="flex: 1"></span><span style="font-size: 12px; color: #5B616E">AWS catalog checked Oct 29, 2026</span>
+    </div>
+  </div>
+  <div style="display: flex; flex-wrap: wrap">
+    <div style="flex: 999 1 600px; min-width: 0; overflow-x: auto">
+      <table style="border-collapse: collapse; width: 100%; font-size: 13px">
+        <thead><tr style="text-align: left; color: #5B616E; font-size: 11px; letter-spacing: 0.06em"><th style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">PRODUCT</th><th style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">FIT</th><th style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">TWO-REGION WRITES</th><th style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">WATCH OUT FOR</th><th style="padding: 10px 14px; border-bottom: 1px solid #E2E4E9">STATUS</th></tr></thead>
+        <tbody>
+          <tr style="background: #E9ECFC; box-shadow: inset 3px 0 0 #2F49D1"><td style="padding: 12px 14px; font-weight: 600">Aurora DSQL</td><td style="padding: 12px 14px"><span style="background: #E3F4E8; color: #157F3D; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">best fit</span></td><td style="padding: 12px 14px">Two peered regions + witness, strongly consistent</td><td style="padding: 12px 14px">Multi-region only in some regions</td><td style="padding: 12px 14px">GA</td></tr>
+          <tr><td style="padding: 12px 14px; font-weight: 600">DynamoDB global tables, strong mode</td><td style="padding: 12px 14px"><span style="background: #FFF3D6; color: #8A5A00; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">works</span></td><td style="padding: 12px 14px">Yes, strongly consistent, RPO zero</td><td style="padding: 12px 14px">customer_id reads need a secondary index; nightly scan reads every item</td><td style="padding: 12px 14px">GA</td></tr>
+          <tr><td style="padding: 12px 14px; font-weight: 600">DynamoDB global tables, eventual mode</td><td style="padding: 12px 14px"><span style="background: #FFF3D6; color: #8A5A00; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">works</span></td><td style="padding: 12px 14px">Yes; the last write wins on conflict</td><td style="padding: 12px 14px">Two regions can briefly disagree</td><td style="padding: 12px 14px">GA</td></tr>
+          <tr style="color: #5B616E"><td style="padding: 12px 14px; font-weight: 600">Aurora PostgreSQL</td><td style="padding: 12px 14px"><span style="background: #F3F4F6; color: #3E434D; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">hidden by filter</span></td><td style="padding: 12px 14px">One writer; other regions read copies</td><td style="padding: 12px 14px">us-west-2 writes cross the country</td><td style="padding: 12px 14px">GA</td></tr>
+        </tbody>
+      </table>
+      <div style="padding: 12px 14px; font-size: 12.5px; color: #3E434D">Products marked “works” fit with a trade-off you'll see in Simulate. Products that can't hold a table at all (SQS, S3) aren't listed.</div>
+    </div>
+    <aside aria-label="Selected product" style="flex: 1 1 320px; max-width: 380px; border-left: 1px solid #E2E4E9; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; background: #FBFBFC">
+      <div><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">AWS · DISTRIBUTED SQL</div><div style="font-size: 18px; font-weight: 600">Aurora DSQL</div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12.5px">
+        <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #E2E4E9"><span style="color: #5B616E">Modes</span><span>Single region · Multi-region</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #E2E4E9"><span style="color: #5B616E">Availability target</span><span>99.99% · 99.999% multi-region</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #E2E4E9"><span style="color: #5B616E">Network</span><span>Managed, reached by endpoint</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #E2E4E9"><span style="color: #5B616E">Billing</span><span>DPUs + storage per GB-month</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #E2E4E9"><span style="color: #5B616E">Price here</span><span>[from Price List API]</span></div>
+      </div>
+      <div style="font-size: 12.5px; color: #3E434D">Simulate will add a commit wait for the peer region on every write and keep reads local.</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap"><a href="Deploy-AWS.dc.html" style="text-decoration: none; background: #2F49D1; color: #FFFFFF; font-weight: 600; border-radius: 8px; padding: 7px 14px">Put Checkouts here</a><button type="button" style="font: inherit; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 12px">Add to an existing store</button></div>
+      <div style="font-size: 12px; color: #5B616E">Source: <a href="https://aws.amazon.com/blogs/aws/amazon-aurora-dsql-is-now-generally-available">Aurora DSQL GA announcement</a> · entry checked Oct 29, 2026</div>
+    </aside>
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

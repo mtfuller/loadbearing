@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Build: step through Checkout</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F49D1}a:hover{color:#1F33A3}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 960px; background: #F3F4F6; color: #15171C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13.5px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 20px; background: #FFFFFF; border-bottom: 1px solid #E2E4E9">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2F49D1" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 4v16"></path></svg>
+    <span style="font-weight: 700; font-size: 16px; letter-spacing: -0.01em">Loadbearing</span>
+  </div>
+  <div style="display: flex; gap: 6px; flex-wrap: wrap">
+    <button type="button" style="font: inherit; display: flex; gap: 6px; align-items: center; background: #F8F9FB; border: 1px solid #E2E4E9; border-radius: 8px; padding: 4px 10px"><span style="font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">BUILD</span><span style="font-weight: 500">Checkout system</span></button>
+    <button type="button" style="font: inherit; display: flex; gap: 6px; align-items: center; background: #F8F9FB; border: 1px solid #E2E4E9; border-radius: 8px; padding: 4px 10px"><span style="font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">DEPLOY</span><span style="font-weight: 500">Global · AWS</span></button>
+  </div>
+  <nav aria-label="Modes" style="display: flex; gap: 4px; margin: 0 auto; flex-wrap: wrap">
+    <a href="Main.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px; background: #E9ECFC; border: 1px solid #B8C1F2"><span style="width: 24px; height: 24px; border-radius: 50%; background: #2F49D1; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">1</span><span><span style="display: block; font-weight: 600">Build</span><span style="display: block; font-size: 11.5px; color: #157F3D">Valid · stepping</span></span></a>
+    <a href="Deploy-AWS.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">2</span><span><span style="display: block; font-weight: 600">Deploy</span><span style="display: block; font-size: 11.5px; color: #8A5A00">Works · 2 quota notes</span></span></a>
+    <a href="Simulate-Watch.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">3</span><span><span style="display: block; font-weight: 600">Simulate</span><span style="display: block; font-size: 11.5px; color: #157F3D">4 scenarios</span></span></a>
+  </nav>
+  <button type="button" style="font: inherit; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 5px 11px">Save &amp; load</button>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; flex: 1; min-height: 0">
+  <aside style="flex: 0 0 230px; background: #FFFFFF; border-right: 1px solid #E2E4E9; padding: 14px 12px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">ENTRY POINTS</span>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: #E9ECFC"><span style="flex: 1; font-weight: 500">Storefront.Checkout</span><span style="font-size: 11px; color: #2F49D1; font-weight: 600">stepping</span></div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px"><span style="flex: 1">Storefront.ViewOrder</span><button type="button" aria-label="Step through ViewOrder" style="width: 28px; height: 28px; border: 0; background: transparent; color: #2F49D1">▶</button></div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px"><span style="flex: 1">Fulfillment: message</span><button type="button" aria-label="Step through Fulfillment" style="width: 28px; height: 28px; border: 0; background: transparent; color: #2F49D1">▶</button></div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px"><span style="flex: 1">ProductImport: file</span><button type="button" aria-label="Step through ProductImport" style="width: 28px; height: 28px; border: 0; background: transparent; color: #2F49D1">▶</button></div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">WORKLOADS</span>
+      <div style="padding: 5px 8px">Storefront</div><div style="padding: 5px 8px">CartService</div><div style="padding: 5px 8px">PaymentService</div><div style="padding: 5px 8px">FraudCheck</div><div style="padding: 5px 8px; color: #5B616E">PaymentGateway · outside</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">DATA</span>
+      <div style="padding: 5px 8px; display: flex"><span style="flex: 1">Carts</span><span style="color: #5B616E; font-size: 12px">Key-value</span></div>
+      <div style="padding: 5px 8px; display: flex"><span style="flex: 1">Checkouts</span><span style="color: #5B616E; font-size: 12px">Table</span></div>
+      <div style="padding: 5px 8px; display: flex"><span style="flex: 1">Payments</span><span style="color: #5B616E; font-size: 12px">Table</span></div>
+      <div style="padding: 5px 8px; display: flex"><span style="flex: 1">OrderEvents</span><span style="color: #5B616E; font-size: 12px">Event stream</span></div>
+    </div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; background: #F8F9FB; border-bottom: 1px solid #E2E4E9">
+      <span style="font-weight: 600">Storefront.Checkout</span><span style="color: #5B616E">on mock data · seed 7</span><span style="flex: 1"></span>
+      <button type="button" style="font: inherit; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 4px 10px">New mock data</button>
+      <button type="button" style="font: inherit; background: #E9ECFC; color: #1F33A3; border: 1px solid #B8C1F2; border-radius: 8px; padding: 4px 10px">Stop stepping</button>
+    </div>
+    <div style="position: relative; height: 440px; overflow: hidden; background-color: #F8F9FB; background-image: radial-gradient(#DADDE3 1px, transparent 1px); background-size: 22px 22px">
+      <div style="position: absolute; left: 40px; top: 70px; width: 200px; background: #FFFFFF; border: 2px solid #2F49D1; border-radius: 12px; box-shadow: 0 0 0 5px #E9ECFC, 0 10px 30px rgba(20,24,40,0.14)">
+        <div style="padding: 9px 12px; border-bottom: 1px solid #E2E4E9; font-weight: 600">Storefront</div>
+        <div style="padding: 6px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #E9ECFC">when Checkout</div>
+        <div style="padding: 6px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">when ViewOrder</div>
+      </div>
+      <div style="position: absolute; left: 330px; top: 30px; width: 200px; background: #FFFFFF; border: 1px solid #B8C1F2; border-radius: 12px">
+        <div style="padding: 9px 12px; border-bottom: 1px solid #E2E4E9; font-weight: 600; display: flex; justify-content: space-between">CartService</div>
+        <div style="padding: 6px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">when GetCart</div>
+      </div>
+      <div style="position: absolute; left: 330px; top: 170px; width: 200px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 12px">
+        <div style="padding: 9px 12px; border-bottom: 1px solid #E2E4E9; font-weight: 600">PaymentService</div>
+        <div style="padding: 6px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">when CreatePayment</div>
+      </div>
+      <div style="position: absolute; left: 330px; top: 300px; width: 200px; background: #FFFFFF; border: 1px dashed #9AA0AC; border-radius: 12px">
+        <div style="padding: 9px 12px; border-bottom: 1px solid #E2E4E9; font-weight: 600">PaymentGateway <span style="font-size: 11px; color: #5B616E; font-weight: 500">outside</span></div>
+        <div style="padding: 6px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">when Charge</div>
+      </div>
+      <div style="position: absolute; left: 620px; top: 40px; width: 190px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 12px">
+        <div style="padding: 9px 12px; border-bottom: 1px solid #E2E4E9; background: #FFF3D6; border-radius: 12px 12px 0 0; font-weight: 600">Customers</div>
+        <div style="padding: 4px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">customer_id <span style="color: #2F49D1">key</span></div>
+        <div style="padding: 4px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">email · country</div>
+      </div>
+      <div style="position: absolute; left: 620px; top: 170px; width: 190px; background: #FFFFFF; border: 2px solid #C2410C; border-radius: 12px; box-shadow: 0 0 0 5px #FBE3D5">
+        <div style="padding: 9px 12px; border-bottom: 1px solid #E2E4E9; background: #FFF3D6; border-radius: 10px 10px 0 0; font-weight: 600; display: flex; justify-content: space-between; align-items: center">Checkouts <span style="background: #C2410C; color: #FFFFFF; font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px">insert +1</span></div>
+        <div style="padding: 4px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">checkout_id <span style="color: #2F49D1">key</span></div>
+        <div style="padding: 4px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">customer_id → Customers</div>
+        <div style="padding: 4px 12px 8px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">status · total</div>
+      </div>
+      <div style="position: absolute; left: 620px; top: 320px; width: 190px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 16px">
+        <div style="padding: 9px 12px; background: #E3F4E8; border-radius: 16px 16px 0 0; font-weight: 600">OrderEvents</div>
+        <div style="padding: 4px 12px 8px; font-size: 12px; color: #5B616E">0 messages waiting</div>
+      </div>
+      <svg width="840" height="440" style="position: absolute; left: 0; top: 0; pointer-events: none" aria-hidden="true">
+        <path d="M240 120 C 300 120, 300 52, 330 52" fill="none" stroke="#9AA0AC" stroke-width="1.4"></path>
+        <path d="M240 120 C 300 120, 300 192, 330 192" fill="none" stroke="#9AA0AC" stroke-width="1.4"></path>
+        <path d="M530 192 C 570 192, 580 196, 620 196" fill="none" stroke="#9AA0AC" stroke-width="1.4"></path>
+        <path d="M240 120 C 420 120, 470 140, 620 196" fill="none" stroke="#C2410C" stroke-width="2.6" stroke-dasharray="6 5"></path>
+        <circle cx="560" cy="170" r="8" fill="#C2410C"></circle><circle cx="560" cy="170" r="14" fill="#C2410C" fill-opacity="0.2"></circle>
+        <text x="560" y="152" text-anchor="middle" font-size="11" font-weight="600" fill="#C2410C" font-family="IBM Plex Sans">insert</text>
+      </svg>
+    </div>
+
+    <section aria-label="Step controls" style="background: #FFFFFF; border-top: 1px solid #E2E4E9; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+        <button type="button" aria-label="Restart" style="font: inherit; width: 32px; height: 32px; border: 1px solid #D3D6DD; background: #FFFFFF; border-radius: 8px">↺</button>
+        <button type="button" aria-label="Back one step" style="font: inherit; width: 32px; height: 32px; border: 1px solid #D3D6DD; background: #FFFFFF; border-radius: 8px">◀</button>
+        <button type="button" style="font: inherit; font-weight: 600; background: #2F49D1; color: #FFFFFF; border: 0; border-radius: 8px; padding: 6px 14px">▶ Play</button>
+        <button type="button" style="font: inherit; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 5px 11px">Step</button>
+        <button type="button" style="font: inherit; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 5px 11px">Step over call</button>
+        <span style="width: 1px; height: 22px; background: #E2E4E9"></span>
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">BRANCHES</span>
+        <span style="display: flex; gap: 4px"><span style="padding: 3px 9px; border: 1px solid #2F49D1; background: #E9ECFC; color: #1F33A3; border-radius: 8px; font-weight: 600; font-size: 12.5px">Ask me</span><span style="padding: 3px 9px; border: 1px solid #D3D6DD; border-radius: 8px; font-size: 12.5px">Use the odds</span><span style="padding: 3px 9px; border: 1px solid #D3D6DD; border-radius: 8px; font-size: 12.5px">Likelier side</span></span>
+        <span style="flex: 1"></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #5B616E">step 17 of 41</span>
+      </div>
+      <ol style="list-style: none; margin: 0; padding: 0; border: 1px solid #E2E4E9; border-radius: 10px; background: #F8F9FB; font-size: 12.5px">
+        <li style="display: flex; gap: 10px; padding: 5px 10px; color: #5B616E"><span style="flex: 1">Loop over item: 3 of 3 · Reads Products by product_id → prod_69b9</span><span style="font-family: 'IBM Plex Mono', monospace">CartService:4</span></li>
+        <li style="display: flex; gap: 10px; padding: 5px 10px"><span style="flex: 1">if CartIsEmpty: no, skips it (your choice)</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5B616E">Storefront:4</span></li>
+        <li style="display: flex; gap: 10px; padding: 5px 10px"><span style="flex: 1">Reads Customers by customer_id → cust_5e32</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5B616E">Storefront:7</span></li>
+        <li style="display: flex; gap: 10px; padding: 5px 10px; background: #E9ECFC; color: #1F33A3; font-weight: 600"><span style="flex: 1">Inserts a new Checkouts row chec_6fd2</span><span style="font-family: 'IBM Plex Mono', monospace">Storefront:8</span></li>
+        <li style="display: flex; gap: 10px; padding: 5px 10px; color: #8D929C"><span style="flex: 1">Calls PaymentService.CreatePayment and waits</span><span style="font-family: 'IBM Plex Mono', monospace">Storefront:9</span></li>
+      </ol>
+    </section>
+  </main>
+
+  <aside style="flex: 1 1 360px; max-width: 420px; background: #FFFFFF; border-left: 1px solid #E2E4E9; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; justify-content: space-between"><span style="font-weight: 600">Storefront <span style="color: #5B616E; font-weight: 400">line 8</span></span><a href="Main.dc.html" style="font-size: 12.5px">Edit this code</a></div>
+      <pre style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 20px; background: #FBFBFC; border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px 0; overflow: auto"><span style="display: block; padding: 0 10px"><span style="color: #8D929C">6 </span>  }</span><span style="display: block; padding: 0 10px"><span style="color: #8D929C">7 </span>  <b style="color: #2F49D1">read</b> Customers <b style="color: #2F49D1">by</b> customer_id</span><span style="display: block; padding: 0 10px; background: #E9ECFC; box-shadow: inset 3px 0 0 #2F49D1"><span style="color: #2F49D1">8 </span>  <b style="color: #2F49D1">insert</b> Checkouts</span><span style="display: block; padding: 0 10px"><span style="color: #8D929C">9 </span>  <b style="color: #2F49D1">call</b> PaymentService.CreatePayment</span><span style="display: block; padding: 0 10px"><span style="color: #8D929C">10</span>  <b style="color: #2F49D1">if</b> PaymentDeclined <span style="color: #A21CAF">@6%</span> {</span></pre>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px; border: 1px solid #E2E4E9; border-radius: 10px; padding: 10px; background: #F8F9FB">
+      <span style="font-weight: 600">Inserts into Checkouts</span>
+      <div style="overflow-x: auto"><table style="border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; width: 100%">
+        <thead><tr><th style="text-align: left; padding: 3px 6px; color: #5B616E; font-family: 'IBM Plex Sans'">checkout_id</th><th style="text-align: left; padding: 3px 6px; color: #5B616E; font-family: 'IBM Plex Sans'">customer_id</th><th style="text-align: left; padding: 3px 6px; color: #5B616E; font-family: 'IBM Plex Sans'">status</th><th style="text-align: left; padding: 3px 6px; color: #5B616E; font-family: 'IBM Plex Sans'">total</th></tr></thead>
+        <tbody><tr style="background: #E3F4E8"><td style="padding: 3px 6px">chec_6fd2</td><td style="padding: 3px 6px">cust_5e32</td><td style="padding: 3px 6px">pending</td><td style="padding: 3px 6px">141.05</td></tr></tbody>
+      </table></div>
+      <span style="font-size: 12.5px; color: #3E434D">customer_id came from the Customers row read on line 7. Checkouts now has 7 mock rows.</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <span style="font-weight: 600">What the request knows</span>
+      <div style="display: grid; grid-template-columns: auto 1fr; border: 1px solid #E2E4E9; border-radius: 8px; overflow: hidden; font-family: 'IBM Plex Mono', monospace; font-size: 12px">
+        <span style="padding: 4px 8px; color: #5B616E; border-bottom: 1px solid #E2E4E9">customer_id</span><span style="padding: 4px 8px; border-bottom: 1px solid #E2E4E9">cust_5e32</span>
+        <span style="padding: 4px 8px; color: #5B616E; border-bottom: 1px solid #E2E4E9">items</span><span style="padding: 4px 8px; border-bottom: 1px solid #E2E4E9">3 items</span>
+        <span style="padding: 4px 8px; color: #5B616E; background: #FFF3D6">checkout_id</span><span style="padding: 4px 8px; background: #FFF3D6">chec_6fd2 · new</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span style="font-weight: 600">Call stack</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #1F33A3; font-weight: 600">Storefront.Checkout</span>
+    </div>
+  </aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

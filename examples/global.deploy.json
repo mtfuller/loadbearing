@@ -1,0 +1,205 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-global",
+  "name": "Global services",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {
+    "PaymentGateway": {
+      "region": "use1"
+    }
+  },
+  "compute": [
+    {
+      "id": "c1",
+      "name": "edge-cluster",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 3,
+      "max": 40,
+      "workloads": [
+        "Storefront",
+        "CartService"
+      ]
+    },
+    {
+      "id": "c2",
+      "name": "payments-cluster",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Medium",
+      "min": 3,
+      "max": 20,
+      "workloads": [
+        "PaymentService",
+        "FraudCheck"
+      ]
+    },
+    {
+      "id": "c3",
+      "name": "workers",
+      "type": "fn",
+      "regions": [
+        "use1"
+      ],
+      "concurrency": 1000,
+      "memory": 1024,
+      "vpc": true,
+      "workloads": [
+        "Fulfillment",
+        "ProductImport",
+        "NightlyReport"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s1",
+      "name": "orders-db",
+      "type": "distsql",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "consensus",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "data": [
+        "Checkouts",
+        "Shipments"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s2",
+      "name": "payments-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "data": [
+        "Payments"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s3",
+      "name": "customers-kv",
+      "type": "kv",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "multi-primary",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "data": [
+        "Customers",
+        "Carts"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s4",
+      "name": "catalog-db",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Small",
+      "data": [
+        "Products"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s5",
+      "name": "events",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "partitions": 12,
+      "data": [
+        "OrderEvents"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s6",
+      "name": "files",
+      "type": "objects",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "data": [
+        "ProductFeeds",
+        "Reports"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    }
+  ],
+  "network": {
+    "link": "peering",
+    "steering": "nearest",
+    "regions": {
+      "use1": {
+        "entry": "lb",
+        "limit": 10000,
+        "nat": true,
+        "endpoints": false
+      },
+      "euw1": {
+        "entry": "lb",
+        "limit": 10000,
+        "nat": true,
+        "endpoints": false
+      },
+      "apse1": {
+        "entry": "lb",
+        "limit": 10000,
+        "nat": true,
+        "endpoints": false
+      }
+    }
+  }
+}

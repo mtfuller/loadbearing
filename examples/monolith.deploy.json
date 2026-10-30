@@ -1,0 +1,125 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-mono",
+  "name": "Monolith in one region",
+  "regions": [
+    "use1"
+  ],
+  "peering": false,
+  "externals": {
+    "PaymentGateway": {
+      "region": "use1"
+    }
+  },
+  "compute": [
+    {
+      "id": "c1",
+      "name": "app-cluster",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Medium",
+      "min": 3,
+      "max": 30,
+      "workloads": [
+        "Storefront",
+        "CartService",
+        "PaymentService",
+        "FraudCheck",
+        "Fulfillment",
+        "ProductImport",
+        "NightlyReport"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s1",
+      "name": "main-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "data": [
+        "Customers",
+        "Products",
+        "Checkouts",
+        "Payments",
+        "Shipments"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s2",
+      "name": "cart-cache",
+      "type": "redis",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "data": [
+        "Carts"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s3",
+      "name": "events",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "partitions": 12,
+      "data": [
+        "OrderEvents"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    },
+    {
+      "id": "s4",
+      "name": "files",
+      "type": "objects",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "data": [
+        "ProductFeeds",
+        "Reports"
+      ],
+      "shards": 1,
+      "dataCfg": {}
+    }
+  ],
+  "network": {
+    "link": "peering",
+    "steering": "nearest",
+    "regions": {
+      "use1": {
+        "entry": "lb",
+        "limit": 10000,
+        "nat": true,
+        "endpoints": false
+      }
+    }
+  }
+}

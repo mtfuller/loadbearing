@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deploy on AWS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2F49D1}a:hover{color:#1F33A3}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 960px; background: #F3F4F6; color: #15171C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13.5px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 20px; background: #FFFFFF; border-bottom: 1px solid #E2E4E9">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2F49D1" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 4v16"></path></svg>
+    <span style="font-weight: 700; font-size: 16px">Loadbearing</span>
+  </div>
+  <nav aria-label="Modes" style="display: flex; gap: 4px; margin: 0 auto; flex-wrap: wrap">
+    <a href="Main.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">1</span><span style="font-weight: 600">Build</span></a>
+    <a href="Deploy-AWS.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px; background: #E9ECFC; border: 1px solid #B8C1F2"><span style="width: 24px; height: 24px; border-radius: 50%; background: #2F49D1; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">2</span><span><span style="display: block; font-weight: 600">Deploy</span><span style="display: block; font-size: 11.5px; color: #8A5A00">Works · 2 quota notes</span></span></a>
+    <a href="Simulate-Watch.dc.html" style="text-decoration: none; color: #15171C; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E9EAEE; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">3</span><span style="font-weight: 600">Simulate</span></a>
+  </nav>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; flex: 1">
+  <main style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; background: #F8F9FB; border-bottom: 1px solid #E2E4E9">
+      <div role="group" aria-label="Provider" style="display: inline-flex; background: #E9EAEE; border-radius: 9px; padding: 3px; gap: 2px">
+        <a href="Main.dc.html" style="text-decoration: none; color: #3E434D; padding: 4px 12px; border-radius: 7px">Generic</a>
+        <a href="Deploy-AWS.dc.html" style="text-decoration: none; color: #15171C; padding: 4px 12px; border-radius: 7px; background: #FFFFFF; font-weight: 600">AWS</a>
+        <a href="Deploy-GCP.dc.html" style="text-decoration: none; color: #3E434D; padding: 4px 12px; border-radius: 7px">Google Cloud</a>
+      </div>
+      <span style="font-size: 12.5px; color: #5B616E">AWS catalog · checked Oct 29, 2026</span>
+      <span style="flex: 1"></span>
+      <div role="group" aria-label="Detail" style="display: inline-flex; background: #E9EAEE; border-radius: 9px; padding: 3px; gap: 2px"><span style="padding: 4px 12px; border-radius: 7px">Regions</span><span style="padding: 4px 12px; border-radius: 7px; background: #FFFFFF; font-weight: 600">Zones</span></div>
+      <a href="Catalog.dc.html" style="text-decoration: none; background: #2F49D1; color: #FFFFFF; font-weight: 600; border-radius: 8px; padding: 6px 12px">+ Add from catalog</a>
+    </div>
+
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-x: auto">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; background: #FFFFFF; border: 1px dashed #C9CDD5; border-radius: 12px">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">USERS</span>
+        <span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">North America 50%</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Europe 30%</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Asia 20%</span>
+        <span style="flex: 1"></span>
+        <span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Route 53 · latency routing</span>
+        <span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">Transit Gateway · 2 regions</span>
+      </div>
+
+      <div style="display: flex; gap: 40px; align-items: flex-start">
+        <section aria-label="us-east-1" style="flex: 1 0 640px; background: #FFFFFF; border: 1.5px solid #C9CDD5; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #2F49D1"></span><span style="font-weight: 600">us-east-1</span><span style="color: #5B616E">N. Virginia · 3 of 6 zones used</span></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center"><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px; font-weight: 500">Application Load Balancer · 3 zones</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px">API Gateway · 10,000 req/s account limit</span></div>
+          <div style="border: 1.5px dashed #B8C1F2; border-radius: 12px; padding: 10px; background: #F5F6FE; display: flex; flex-direction: column; gap: 10px">
+            <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #1F33A3">VPC 10.0.0.0/16 · PRIVATE SUBNETS PER ZONE</div>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+              <div style="border: 1px solid #D9DDF7; border-radius: 10px; padding: 8px; background: #FFFFFF; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; font-weight: 600; color: #5B616E">us-east-1a</span><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px">EKS nodes · 3 pods</span><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px">Lambda Managed Instances · Graviton</span><span style="border: 1px solid #C2410C; border-radius: 8px; padding: 6px 8px; background: #FFF6F0">ElastiCache Valkey · primary</span></div>
+              <div style="border: 1px solid #D9DDF7; border-radius: 10px; padding: 8px; background: #FFFFFF; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; font-weight: 600; color: #5B616E">us-east-1b</span><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px">EKS nodes · 3 pods</span><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px">Lambda Managed Instances · Graviton</span><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px">ElastiCache Valkey · replica</span></div>
+              <div style="border: 1px solid #D9DDF7; border-radius: 10px; padding: 8px; background: #FFFFFF; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; font-weight: 600; color: #5B616E">us-east-1c</span><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px">EKS nodes · 3 pods</span><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px">Lambda Managed Instances · Graviton</span><span style="border: 1px dashed #9AA0AC; border-radius: 8px; padding: 6px 8px; color: #5B616E">no cache replica</span></div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap"><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px; background: #FFFFFF">Regional NAT gateway · spans zones</span><span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px; background: #FFFFFF">Gateway endpoints · S3, DynamoDB</span></div>
+          </div>
+          <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">REGIONAL SERVICES</div>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+            <div style="border: 2px solid #2F49D1; border-radius: 10px; padding: 8px; box-shadow: 0 0 0 4px #E9ECFC"><div style="font-weight: 600">Aurora DSQL</div><div style="font-size: 12px; color: #5B616E">multi-region · peered with us-west-2 · witness us-east-2</div><div style="margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">Checkouts · Payments</div></div>
+            <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">DynamoDB</div><div style="font-size: 12px; color: #5B616E">global table · strong consistency</div><div style="margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">Carts · Customers</div></div>
+            <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">SQS fair queue</div><div style="font-size: 12px; color: #5B616E">message group: customer_id</div><div style="margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">OrderEvents</div></div>
+            <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">EventBridge Scheduler</div><div style="font-size: 12px; color: #5B616E">daily 02:00 → NightlyReport</div></div>
+            <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">S3</div><div style="font-size: 12px; color: #5B616E">Standard · event notifications</div><div style="margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">ProductFeeds · Reports</div></div>
+          </div>
+        </section>
+        <section aria-label="us-west-2" style="flex: 0 0 300px; background: #FFFFFF; border: 1.5px solid #C9CDD5; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #2F49D1"></span><span style="font-weight: 600">us-west-2</span><span style="color: #5B616E">Oregon · zones collapsed</span></div>
+          <span style="border: 1px solid #D3D6DD; border-radius: 999px; padding: 3px 10px; align-self: flex-start">Application Load Balancer</span>
+          <div style="border: 1.5px dashed #B8C1F2; border-radius: 12px; padding: 10px; background: #F5F6FE; display: flex; flex-direction: column; gap: 6px"><span style="border: 1px solid #D3D6DD; border-radius: 8px; padding: 6px 8px; background: #FFFFFF">EKS · 3 zones · 9 pods</span></div>
+          <div style="border: 1px solid #2F49D1; border-radius: 10px; padding: 8px"><div style="font-weight: 600">Aurora DSQL</div><div style="font-size: 12px; color: #5B616E">peer · read and write here</div></div>
+          <div style="border: 1px solid #D3D6DD; border-radius: 10px; padding: 8px"><div style="font-weight: 600">DynamoDB</div><div style="font-size: 12px; color: #5B616E">replica · strong</div></div>
+          <div style="border: 1px dashed #9AA0AC; border-radius: 10px; padding: 8px; color: #3E434D"><div style="font-weight: 600">us-east-2 · witness</div><div style="font-size: 12px; color: #5B616E">stores the DSQL log only; no endpoint</div></div>
+        </section>
+      </div>
+    </div>
+
+    <section aria-label="Checks" style="margin-top: auto; background: #FFFFFF; border-top: 1px solid #E2E4E9; padding: 10px 16px; display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; gap: 10px; align-items: center"><span style="background: #E3F4E8; color: #157F3D; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px">Infrastructure works</span><span style="color: #5B616E; font-size: 12.5px">Checked against AWS default quotas for this account</span></div>
+      <div style="display: flex; gap: 10px; align-items: center; font-size: 13px"><span style="width: 18px; height: 18px; border-radius: 50%; background: #FFF3D6; color: #8A5A00; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px">!</span><span style="flex: 1">Lambda concurrency: above about 3,900 checkouts/s, us-east-1 needs more than the default quota of 1,000 concurrent executions per region.</span><button type="button" style="font: inherit; font-size: 12.5px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 3px 10px">Plan a quota increase</button></div>
+      <div style="display: flex; gap: 10px; align-items: center; font-size: 13px"><span style="width: 18px; height: 18px; border-radius: 50%; background: #FFF3D6; color: #8A5A00; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px">!</span><span style="flex: 1">ElastiCache has no replica in us-east-1c. Losing us-east-1a fails over to 1b; losing both leaves the cache empty.</span><button type="button" style="font: inherit; font-size: 12.5px; background: #FFFFFF; border: 1px solid #D3D6DD; border-radius: 8px; padding: 3px 10px">Add a replica in 1c</button></div>
+    </section>
+  </main>
+
+  <aside aria-label="Inspector" style="flex: 1 1 340px; max-width: 400px; background: #FFFFFF; border-left: 1px solid #E2E4E9; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px">
+    <div><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #5B616E">STORE · AWS</div><div style="font-size: 18px; font-weight: 600">Aurora DSQL</div><div style="font-size: 12.5px; color: #3E434D">Distributed SQL, PostgreSQL-compatible. Writable in two peered regions; a third witness region keeps the log.</div></div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 600">Mode</span><div style="display: flex; gap: 4px; flex-wrap: wrap"><span style="padding: 4px 10px; border: 1px solid #D3D6DD; border-radius: 8px">Single region</span><span style="padding: 4px 10px; border: 1px solid #2F49D1; background: #E9ECFC; color: #1F33A3; font-weight: 600; border-radius: 8px">Multi-region</span></div><span style="font-size: 12.5px; color: #3E434D">Multi-region is offered only where the catalog lists it. Other regions are greyed out with the reason.</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 600">Regions</span>
+      <label style="display: flex; gap: 8px; align-items: center"><span style="width: 70px; color: #5B616E">Peer 1</span><select style="font: inherit; flex: 1; padding: 4px 6px; border: 1px solid #D3D6DD; border-radius: 7px"><option>us-east-1</option></select></label>
+      <label style="display: flex; gap: 8px; align-items: center"><span style="width: 70px; color: #5B616E">Peer 2</span><select style="font: inherit; flex: 1; padding: 4px 6px; border: 1px solid #D3D6DD; border-radius: 7px"><option>us-west-2</option></select></label>
+      <label style="display: flex; gap: 8px; align-items: center"><span style="width: 70px; color: #5B616E">Witness</span><select style="font: inherit; flex: 1; padding: 4px 6px; border: 1px solid #D3D6DD; border-radius: 7px"><option>us-east-2</option></select></label>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">What Simulate uses</span>
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid #E2E4E9"><span>Write commit</span><span style="font-family: 'IBM Plex Mono', monospace">waits for the peer</span></div>
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid #E2E4E9"><span>Reads</span><span style="font-family: 'IBM Plex Mono', monospace">local, strongly consistent</span></div>
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid #E2E4E9"><span>Availability target</span><span style="font-family: 'IBM Plex Mono', monospace">99.999%</span></div>
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid #E2E4E9"><span>Price</span><span style="font-family: 'IBM Plex Mono', monospace">[per DPU, from Price List API]</span></div>
+    </div>
+    <div style="font-size: 12px; color: #5B616E">Catalog entry: GA · checked Oct 29, 2026 · <a href="Catalog.dc.html">source</a></div>
+  </aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
