@@ -1,0 +1,91 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-streaming-service-scaled",
+  "name": "Scaled multi-region design",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-streaming-service-scaled",
+      "name": "edge-services",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 6,
+      "max": 40,
+      "workloads": [
+        "PlaybackAPI",
+        "Transcoder"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-streaming-service-scaled-0",
+      "name": "catalog-db",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Catalog",
+        "Manifests"
+      ]
+    },
+    {
+      "id": "s-streaming-service-scaled-1",
+      "name": "video-store",
+      "type": "objects",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "crr",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "VideoObjects",
+        "Uploads"
+      ]
+    },
+    {
+      "id": "s-streaming-service-scaled-2",
+      "name": "view-stream",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ViewEvents"
+      ]
+    }
+  ]
+}

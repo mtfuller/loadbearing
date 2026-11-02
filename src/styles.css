@@ -187,7 +187,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   body { min-width: 360px; }
   .app-header { flex-wrap: wrap; gap: 9px; padding: 9px 12px; }
   .brand { min-width: 0; flex: 1; }
-  .header-actions { min-width: 0; }
+  .header-actions { min-width: 0; flex-wrap: wrap; }
   .mode-tabs { order: 3; width: 100%; justify-content: stretch; }
   .mode-tab { justify-content: center; flex: 1; padding: 7px 5px; font-size: 12px; }
   .workspace { grid-template-columns: 1fr; min-height: unset; }
@@ -263,6 +263,19 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .library-row strong { font-size: 12px; }
 .library-row small { color: var(--muted); font-size: 10px; }
 .library-row-actions { display: flex; align-items: center; gap: 10px; }
+.example-list { display: grid; gap: 9px; margin-top: 15px; }
+.example-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-alt); }
+.example-card h3 { margin: 0 0 4px; font-size: 13px; }
+.example-card p, .example-card small { display: block; margin: 0 0 6px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.example-card small { margin: 0; }
+.example-card .button { flex: none; }
+.comparison-table-wrap { overflow-x: auto; }
+.comparison-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.comparison-table th, .comparison-table td { padding: 9px 10px; border-top: 1px solid var(--line); text-align: left; }
+.comparison-table thead th { color: var(--muted); font-size: 10px; font-weight: 650; }
+.comparison-table tbody th { font-weight: 650; }
+.comparison-card > p { margin-bottom: 5px; }
+.comparison-card .comparison-limits { margin-top: 4px; font-size: 10px !important; }
 .step-through { padding: 14px 16px; border-top: 1px solid var(--line); background: var(--surface); }
 .step-through h2 { margin: 0; font-size: 14px; }
 .branch-choice { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px; border-radius: 8px; background: var(--accent-soft); }
@@ -340,4 +353,6 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .odds-control .text-button { grid-column: 2; grid-row: 2; }
   .library-save { align-items: stretch; flex-direction: column; }
   .library-save .field-label { flex: auto; }
+  .example-card { flex-direction: column; }
+  .example-card .button { align-self: flex-start; }
 }

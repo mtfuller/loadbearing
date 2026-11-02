@@ -9,6 +9,7 @@ window.Loadbearing = {
   evaluateRate,
   exampleBuild,
   exampleDeploys,
+  exampleSystems,
   mockDB,
   newCompute,
   newStore,

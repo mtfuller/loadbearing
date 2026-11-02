@@ -1,0 +1,147 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-social-network",
+  "name": "Social network",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "SocialAPI",
+      "x": 20,
+      "y": 80,
+      "code": "when PublishPost {\n  insert Posts\n  publish FeedEvents\n}\n\nwhen Timeline {\n  read Feeds by user_id many 30\n}\n\nwhen Follow {\n  insert Follows\n}"
+    },
+    {
+      "id": "w2",
+      "name": "FeedWorker",
+      "x": 300,
+      "y": 320,
+      "code": "when message FeedEvents {\n  read Follows by followee_id many 100\n  insert Feeds\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "Posts",
+      "kind": "table",
+      "x": 760,
+      "y": 120,
+      "rows": 20000000000,
+      "rowKB": 1,
+      "fields": [
+        {
+          "name": "post_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "index": true
+        },
+        {
+          "name": "body",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "Follows",
+      "kind": "table",
+      "x": 500,
+      "y": 210,
+      "rows": 50000000000,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "follow_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "follower_id",
+          "type": "uuid",
+          "index": true
+        },
+        {
+          "name": "followee_id",
+          "type": "uuid",
+          "index": true
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "name": "Feeds",
+      "kind": "kv",
+      "x": 760,
+      "y": 300,
+      "rows": 3000000000,
+      "rowKB": 2,
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "post_ids",
+          "type": "json"
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "name": "FeedEvents",
+      "kind": "stream",
+      "x": 500,
+      "y": 390,
+      "rows": 0,
+      "rowKB": 0.3,
+      "fields": [
+        {
+          "name": "post_id",
+          "type": "uuid"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid"
+        }
+      ],
+      "partitionKey": "user_id"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc-social-read",
+      "name": "Morning timeline traffic",
+      "entry": "SocialAPI.Timeline",
+      "count": 18000000,
+      "durationMin": 60,
+      "burst": "peak",
+      "origins": {
+        "na": 55,
+        "eu": 25,
+        "asia": 20
+      },
+      "odds": {},
+      "goalMs": 250
+    },
+    {
+      "id": "sc-social-post",
+      "name": "Viral post spike",
+      "entry": "SocialAPI.PublishPost",
+      "count": 1200000,
+      "durationMin": 15,
+      "burst": "ramp",
+      "origins": {
+        "na": 55,
+        "eu": 25,
+        "asia": 20
+      },
+      "odds": {},
+      "goalMs": 500
+    }
+  ]
+}

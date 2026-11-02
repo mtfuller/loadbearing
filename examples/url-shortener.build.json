@@ -1,0 +1,125 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-url-shortener",
+  "name": "URL shortener",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "LinkAPI",
+      "x": 20,
+      "y": 80,
+      "code": "when Create {\n  insert ShortLinks\n}\n\nwhen Redirect {\n  read ShortLinks by code\n  publish ClickEvents\n}"
+    },
+    {
+      "id": "w2",
+      "name": "ClickWorker",
+      "x": 300,
+      "y": 300,
+      "code": "when message ClickEvents {\n  insert Clicks\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "ShortLinks",
+      "kind": "table",
+      "x": 760,
+      "y": 120,
+      "rows": 200000000,
+      "rowKB": 0.4,
+      "fields": [
+        {
+          "name": "code",
+          "type": "text",
+          "key": true
+        },
+        {
+          "name": "url",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "ClickEvents",
+      "kind": "stream",
+      "x": 500,
+      "y": 210,
+      "rows": 0,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "code",
+          "type": "text"
+        },
+        {
+          "name": "clicked_at",
+          "type": "timestamp"
+        }
+      ],
+      "partitionKey": "code"
+    },
+    {
+      "id": "d3",
+      "name": "Clicks",
+      "kind": "table",
+      "x": 760,
+      "y": 300,
+      "rows": 800000000,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "click_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "clicked_at",
+          "type": "timestamp"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc-url-redirect",
+      "name": "Redirect rush",
+      "entry": "LinkAPI.Redirect",
+      "count": 12000000,
+      "durationMin": 60,
+      "burst": "peak",
+      "origins": {
+        "na": 45,
+        "eu": 30,
+        "asia": 25
+      },
+      "odds": {},
+      "goalMs": 100
+    },
+    {
+      "id": "sc-url-create",
+      "name": "Link creation",
+      "entry": "LinkAPI.Create",
+      "count": 120000,
+      "durationMin": 60,
+      "burst": "steady",
+      "origins": {
+        "na": 60,
+        "eu": 25,
+        "asia": 15
+      },
+      "odds": {},
+      "goalMs": 250
+    }
+  ]
+}

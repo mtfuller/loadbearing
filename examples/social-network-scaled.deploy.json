@@ -1,0 +1,90 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-social-network-scaled",
+  "name": "Scaled multi-region design",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-social-network-scaled",
+      "name": "edge-services",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 6,
+      "max": 40,
+      "workloads": [
+        "SocialAPI",
+        "FeedWorker"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-social-network-scaled-0",
+      "name": "social-db",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 8,
+      "partitions": 12,
+      "data": [
+        "Posts",
+        "Follows"
+      ]
+    },
+    {
+      "id": "s-social-network-scaled-1",
+      "name": "feed-cache",
+      "type": "redis",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Feeds"
+      ]
+    },
+    {
+      "id": "s-social-network-scaled-2",
+      "name": "feed-stream",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "FeedEvents"
+      ]
+    }
+  ]
+}

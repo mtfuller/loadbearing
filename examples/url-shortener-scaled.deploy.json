@@ -1,0 +1,89 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-url-shortener-scaled",
+  "name": "Scaled multi-region design",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-url-shortener-scaled",
+      "name": "edge-services",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 6,
+      "max": 40,
+      "workloads": [
+        "LinkAPI",
+        "ClickWorker"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-url-shortener-scaled-0",
+      "name": "links-kv",
+      "type": "kv",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "multi-primary",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ShortLinks"
+      ]
+    },
+    {
+      "id": "s-url-shortener-scaled-1",
+      "name": "click-stream",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ClickEvents"
+      ]
+    },
+    {
+      "id": "s-url-shortener-scaled-2",
+      "name": "analytics-db",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Clicks"
+      ]
+    }
+  ]
+}
