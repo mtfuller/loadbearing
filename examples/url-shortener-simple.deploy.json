@@ -1,0 +1,81 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-url-shortener-simple",
+  "name": "Single-region starter",
+  "regions": [
+    "use1"
+  ],
+  "peering": false,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-url-shortener-simple",
+      "name": "app",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Small",
+      "min": 2,
+      "max": 8,
+      "workloads": [
+        "LinkAPI",
+        "ClickWorker"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-url-shortener-simple-0",
+      "name": "links-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ShortLinks"
+      ]
+    },
+    {
+      "id": "s-url-shortener-simple-1",
+      "name": "click-stream",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ClickEvents"
+      ]
+    },
+    {
+      "id": "s-url-shortener-simple-2",
+      "name": "analytics-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Clicks"
+      ]
+    }
+  ]
+}

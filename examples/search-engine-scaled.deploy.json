@@ -1,0 +1,110 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-search-engine-scaled",
+  "name": "Scaled multi-region design",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-search-engine-scaled",
+      "name": "edge-services",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 6,
+      "max": 40,
+      "workloads": [
+        "SearchAPI",
+        "Ranker",
+        "Crawler",
+        "Indexer"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-search-engine-scaled-0",
+      "name": "content-db",
+      "type": "doc",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 8,
+      "partitions": 12,
+      "data": [
+        "Documents"
+      ]
+    },
+    {
+      "id": "s-search-engine-scaled-1",
+      "name": "search-index",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 16,
+      "partitions": 12,
+      "data": [
+        "IndexSegments"
+      ]
+    },
+    {
+      "id": "s-search-engine-scaled-2",
+      "name": "index-queue",
+      "type": "queue",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "IndexQueue"
+      ]
+    },
+    {
+      "id": "s-search-engine-scaled-3",
+      "name": "crawl-files",
+      "type": "objects",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "crr",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "CrawlPages"
+      ]
+    }
+  ]
+}

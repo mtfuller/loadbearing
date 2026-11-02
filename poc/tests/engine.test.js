@@ -70,4 +70,49 @@ test('single request steps add up to the total', () => {
   const r = E(`(() => { const d = deps[0]; normalizeDeploy(d); const M = compileModel(B, A, d, validateDeploy(B, A, d)); const sc = B.scenarios[0]; const e = entryInfo(A, sc.entry); const o = originsFor(M, sc, e)[0]; const p = enumeratePaths(A, sc.entry, {})[0]; const s = stepRequest(M, sc, p, o, {}); const last = s.steps[s.steps.length - 1]; return [s.total, last.start + last.dur]; })()`);
   assert.ok(Math.abs(r[0] - r[1]) < 1e-6, JSON.stringify(r));
 });
+test('all system-design examples have valid Builds and Deploys', () => {
+  const examples = E('exampleSystems()');
+  assert.strictEqual(examples.length, 5);
+  for (let i = 0; i < examples.length; i++) {
+    const example = examples[i];
+    const analysis = E(`analyzeBuild(exampleSystems()[${i}].build)`);
+    assert.strictEqual(analysis.valid, true, `${example.name}: ${analysis.problems.map((p) => p.msg).join('; ')}`);
+    assert.strictEqual(example.deploys.length, 2, `${example.name} has two designs to compare`);
+    for (let j = 0; j < example.deploys.length; j++) {
+      const validation = E(`(() => { const x = exampleSystems()[${i}]; const a = analyzeBuild(x.build); const d = x.deploys[${j}]; normalizeDeploy(d); const v = validateDeploy(x.build, a, d); return { valid: v.valid, problems: v.problems.map(p => p.msg) }; })()`);
+      assert.strictEqual(validation.valid, true, `${example.name}: ${example.deploys[j].name}: ${validation.problems.join('; ')}`);
+    }
+  }
+});
+test('system-design examples simulate a rate scenario and a batch scenario', () => {
+  const results = E(`exampleSystems().map(x => {
+    const a = analyzeBuild(x.build), d = x.deploys[0];
+    normalizeDeploy(d);
+    const m = compileModel(x.build, a, d, validateDeploy(x.build, a, d));
+    const rate = x.build.scenarios.find(s => scenarioMode(a, s) === 'rate');
+    const batch = x.build.scenarios.find(s => scenarioMode(a, s) === 'batch');
+    return {
+      name: x.name,
+      rate: rate ? evaluateRate(m, rate, { N: 100, seed: 11 }).p99 : null,
+      batch: batch ? evaluateBatch(m, batch).finishS : null
+    };
+  })`);
+  assert.strictEqual(results.length, 5);
+  for (const result of results) {
+    assert.ok(Number.isFinite(result.rate) && result.rate >= 0, `${result.name} rate simulation`);
+    if (result.batch != null) assert.ok(Number.isFinite(result.batch) && result.batch >= 0, `${result.name} batch simulation`);
+  }
+});
+test('checked-in example files match the in-app examples', () => {
+  const examplesDir = path.join(__dirname, '..', '..', 'examples');
+  for (const example of E('exampleSystems()')) {
+    const slug = example.id;
+    const build = JSON.parse(fs.readFileSync(path.join(examplesDir, `${slug}.build.json`), 'utf8'));
+    const simple = JSON.parse(fs.readFileSync(path.join(examplesDir, `${slug}-simple.deploy.json`), 'utf8'));
+    const scaled = JSON.parse(fs.readFileSync(path.join(examplesDir, `${slug}-scaled.deploy.json`), 'utf8'));
+    assert.strictEqual(build.id, example.build.id, `${example.name} Build export`);
+    assert.strictEqual(simple.id, example.deploys[0].id, `${example.name} starter Deploy export`);
+    assert.strictEqual(scaled.id, example.deploys[1].id, `${example.name} scaled Deploy export`);
+  }
+});
 console.log(`\n${n} passed${process.exitCode ? ', some failed' : ''}`);

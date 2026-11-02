@@ -18,7 +18,7 @@ standalone proof of concept is retained under `poc/` for reference.
 | `poc/loadbearing.html` | The original standalone proof of concept. Open it directly in a browser. |
 | `poc/tests/` | Engine regressions plus Playwright smoke tests for the React app and original prototype. |
 | `mockups/` | 7 static HTML screens of the v1 design (`index.html` lists them); `source/` holds the Claude Design canvas originals. |
-| `examples/` | The checkout Build and two Deploy configs as JSON. Import them in the app with Save & load → Import file. |
+| `examples/` | The checkout example and five system-design examples (URL shortener, search engine, social network, streaming service, food delivery), each with a Build and two Deploys. |
 | `catalog/aws.sample.json` | Sample entries in the planned v1 provider catalog format. |
 
 ## Quick start
@@ -38,10 +38,11 @@ npm run test:legacy-ui                    # standalone prototype browser walkthr
 1. **Build:** drag workload and data nodes onto the canvas; edit workload code, data fields, and positions. Use the entry-point step-through to see interpreter events and choose conditional branches.
 2. **Deploy:** configure regions and networking, size compute, choose store replication and partitioning, place workloads and data, then apply validation fixes.
 3. **Simulate:** edit scenarios, traffic origins and branch odds; run rate or batch workloads, find max throughput, play a timeline, and trace a single request.
-4. **Save and load:** keep separate Build and Deploy documents in the browser library, or import/export either as JSON. The active workspace saves automatically; Undo/Redo and the light/dark theme are available in the header.
+4. **Compare designs:** open a system from **Explore examples**, run a scenario, and compare the same traffic against its alternative Deploy. The table shows latency or finish time, failures and estimated cost.
+5. **Save and load:** keep separate Build and Deploy documents in the browser library, or import/export either as JSON. The active workspace saves automatically; Undo/Redo and the light/dark theme are available in the header.
 
 ## Status
 
 - The React interface is an incremental port: its Build, Deploy, and Simulate flows use the existing pure engine. It also reads the original `loadbearing-work` and `meridian-v3-work` browser-storage keys. The standalone proof of concept remains available at `poc/loadbearing.html`.
-- Next is phase 1 (§15): provider catalogs for AWS and GCP, availability zones, quota checks, and side-by-side comparison. After that come the learning features (§4): guided challenges, a pattern library and failure drills.
+- The app includes five ready-to-run system examples, each with a starter and scaled Deploy, plus side-by-side what-if comparisons. Next is phase 1 (§15): provider catalogs for AWS and GCP, availability zones, and quota checks. After that come the learning features (§4): guided challenges and failure drills.
 - Facts about cloud products were checked on 2026-10-29. Sources are listed at the end of `docs/DESIGN.md`.

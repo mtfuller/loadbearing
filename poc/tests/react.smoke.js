@@ -81,6 +81,14 @@ async function main() {
     await page.getByText('Saved in this browser').waitFor();
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
 
+    await page.getByRole('button', { name: 'Explore examples' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Open example' }).first().click();
+    await page.getByRole('button', { name: 'Simulate' }).click();
+    await page.getByRole('button', { name: 'Compare designs' }).click();
+    await page.getByRole('region', { name: 'Design comparison' }).waitFor();
+    await page.getByText('Same scenario, two Deploys').waitFor();
+
+    await page.getByRole('button', { name: 'Build' }).click();
     await page.setViewportSize({ width: 400, height: 860 });
     await page.getByRole('heading', { name: 'System logic' }).waitFor();
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);

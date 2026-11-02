@@ -1,0 +1,92 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-food-delivery-scaled",
+  "name": "Scaled multi-region design",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-food-delivery-scaled",
+      "name": "edge-services",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 6,
+      "max": 40,
+      "workloads": [
+        "MarketplaceAPI",
+        "Dispatch",
+        "CourierAPI"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-food-delivery-scaled-0",
+      "name": "marketplace-db",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 8,
+      "partitions": 12,
+      "data": [
+        "Restaurants",
+        "Menus",
+        "Orders"
+      ]
+    },
+    {
+      "id": "s-food-delivery-scaled-1",
+      "name": "order-queue",
+      "type": "queue",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "OrderEvents"
+      ]
+    },
+    {
+      "id": "s-food-delivery-scaled-2",
+      "name": "location-store",
+      "type": "kv",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "multi-primary",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "CourierLocations"
+      ]
+    }
+  ]
+}

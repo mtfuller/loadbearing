@@ -82,8 +82,8 @@ The proof of concept already teaches by showing mechanism (step-through, playbac
 | --- | --- | --- | --- | --- |
 | L1 | **Explain every number** | Click any latency, failure or cost and see the steps, resources and assumptions behind it | P0 | Mostly (per-step reasons, "what limits it") |
 | L2 | **Guided challenges** | Start from a broken or naive design with a goal ("survive losing us-east-1b with under 1% failures for under $15/h") and fix it; the app checks the goal and shows hints on request | P0 | No |
-| L3 | **Pattern library** | Open classic architectures as ready Builds and Deploys: cache-aside, outbox, fan-out on write vs. read, CQRS, sharded counters, saga, leader-follower vs. consensus | P0 | One example (checkout) |
-| L4 | **What-if experiments** | Change one setting and see before and after side by side, with the difference explained ("p99 fell 210 ms because reads now stay in eu-west-1") | P0 | No (manual re-run only) |
+| L3 | **Pattern library** | Open classic architectures as ready Builds and Deploys: cache-aside, outbox, fan-out on write vs. read, CQRS, sharded counters, saga, leader-follower vs. consensus | P0 | Five systems plus checkout; compare starter and scaled Deploys |
+| L4 | **What-if experiments** | Change one setting and see before and after side by side, with the difference explained ("p99 fell 210 ms because reads now stay in eu-west-1") | P0 | Compare scenario results across the two example Deploys; editable settings and richer explanations remain |
 | L5 | **Concept glossary in place** | Hover a term (quorum, back-pressure, hot partition) for a short explanation and a link to where it is happening in this design | P1 | No |
 | L6 | **Failure drills** | Inject zone loss, region loss, a slow dependency or a cold cache during playback and watch the system respond | P1 | No |
 | L7 | **Assumptions page** | See and change every constant the model uses, so a learner can ask "what if disks were twice as fast?" | P1 | No |
@@ -409,13 +409,14 @@ The catalog keeps this current: prices refresh from the [AWS Price List API](htt
 
 ```mermaid
 flowchart LR
-  P0["0 Prototype (done)<br/>three modes, generic products,<br/>step, watch, stress"] --> G1{{5 learners run a scenario unaided}}
-  G1 --> P1["1 Real clouds (next)<br/>AWS + GCP catalogs,<br/>zones and quotas, compare runs"] --> G2{{8 of 10 testers name the bottleneck}}
+  P0["0 Prototype (done)<br/>three modes, generic products,<br/>step, watch, stress"] --> P05["0.5 Ready-to-play examples (done)<br/>five systems, two Deploys each,<br/>scenario comparison"]
+  P05 --> G1{{5 learners run a scenario unaided}}
+  G1 --> P1["1 Real clouds (next)<br/>AWS + GCP catalogs,<br/>zones and quotas"] --> G2{{8 of 10 testers name the bottleneck}}
   G2 --> P2["2 Learn by doing<br/>guided challenges, pattern library,<br/>failure drills"] --> G3{{40% finish a challenge they start}}
   G3 --> P3["3 Teach together<br/>shareable lessons, glossary in place,<br/>class workspaces"]
 ```
 
-Each phase starts only when the gate before it is met. Phase 1 is the largest piece of engineering: the catalog format, availability zones, quota checks and side-by-side comparison (D7–D9, S8). Phase 2 turns the sandbox into a curriculum (L2, L3, L6).
+Each phase starts only when the gate before it is met. The ready-to-play examples phase adds classic system shapes with a small set of starting Deploys and repeatable scenarios, so learners can explore before provider-specific products arrive. Phase 1 is the largest piece of engineering: the catalog format, availability zones and quota checks (D7–D9). Phase 2 turns the sandbox into a curriculum (L2, L6); the pattern library and scenario comparison have an initial implementation.
 
 **Build order for phase 1**
 

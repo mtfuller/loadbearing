@@ -1,0 +1,157 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-search-engine",
+  "name": "Search engine",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "SearchAPI",
+      "x": 20,
+      "y": 70,
+      "code": "when Query {\n  read IndexSegments by term many 20\n  call Ranker.Score\n}"
+    },
+    {
+      "id": "w2",
+      "name": "Ranker",
+      "x": 300,
+      "y": 70,
+      "code": "when Score {\n  read Documents by doc_id many 10\n  compute 8ms\n}"
+    },
+    {
+      "id": "w3",
+      "name": "Crawler",
+      "x": 20,
+      "y": 330,
+      "code": "when file CrawlPages {\n  for each page in file parallel 20 {\n    upsert Documents\n    publish IndexQueue\n  }\n}"
+    },
+    {
+      "id": "w4",
+      "name": "Indexer",
+      "x": 300,
+      "y": 330,
+      "code": "when message IndexQueue {\n  insert IndexSegments\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "Documents",
+      "kind": "document",
+      "x": 760,
+      "y": 120,
+      "rows": 5000000000,
+      "rowKB": 8,
+      "fields": [
+        {
+          "name": "doc_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "url",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "body",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "IndexSegments",
+      "kind": "table",
+      "x": 500,
+      "y": 210,
+      "rows": 20000000000,
+      "rowKB": 0.4,
+      "fields": [
+        {
+          "name": "segment_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "term",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "doc_id",
+          "type": "uuid",
+          "index": true
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "name": "IndexQueue",
+      "kind": "queue",
+      "x": 760,
+      "y": 300,
+      "rows": 0,
+      "rowKB": 0.3,
+      "fields": [
+        {
+          "name": "doc_id",
+          "type": "uuid"
+        },
+        {
+          "name": "url",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "name": "CrawlPages",
+      "kind": "file",
+      "x": 500,
+      "y": 390,
+      "rows": 2000000,
+      "rowKB": 6,
+      "fields": [
+        {
+          "name": "url",
+          "type": "text"
+        },
+        {
+          "name": "body",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc-search-query",
+      "name": "Popular search queries",
+      "entry": "SearchAPI.Query",
+      "count": 3600000,
+      "durationMin": 60,
+      "burst": "steady",
+      "origins": {
+        "na": 50,
+        "eu": 30,
+        "asia": 20
+      },
+      "odds": {},
+      "goalMs": 400
+    },
+    {
+      "id": "sc-search-crawl",
+      "name": "Crawl and re-index",
+      "entry": "Crawler.file CrawlPages",
+      "rows": 2000000,
+      "goalMin": 90,
+      "origins": {},
+      "odds": {}
+    }
+  ]
+}

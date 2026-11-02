@@ -16,6 +16,7 @@ import '@xyflow/react/dist/style.css';
 import './styles.css';
 
 const E = window.Loadbearing;
+const SYSTEM_EXAMPLES = E.exampleSystems();
 const STORAGE_KEY = 'loadbearing-react-work';
 const DATA_TYPES = ['table', 'kv', 'document', 'queue', 'stream', 'topic', 'file', 'blob'];
 const duplicate = (value) => JSON.parse(JSON.stringify(value));
@@ -50,6 +51,8 @@ function App() {
   const [future, setFuture] = useState([]);
   const [scenarioId, setScenarioId] = useState('');
   const [result, setResult] = useState(null);
+  const [comparison, setComparison] = useState(null);
+  const [examplesOpen, setExamplesOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [dialog, setDialog] = useState(false);
   const [library, setLibrary] = useState(() => {
@@ -71,6 +74,7 @@ function App() {
     [docs.build, analysis, deploy]
   );
   const canSimulate = !!deployCheck?.valid;
+  const activeExample = SYSTEM_EXAMPLES.find((item) => item.build.id === docs.build.id);
 
   useEffect(() => {
     try {
@@ -83,6 +87,7 @@ function App() {
 
   useEffect(() => {
     setResult(null);
+    setComparison(null);
     setPlayback(null);
     setTrace(null);
     setStepSession(null);
@@ -105,6 +110,7 @@ function App() {
     setFuture([]);
     setDocs((current) => update(duplicate(current)) || current);
     setResult(null);
+    setComparison(null);
   }, [docs]);
 
   const undo = () => {
@@ -176,21 +182,64 @@ function App() {
   const selectScenario = (id) => {
     setScenarioId(id);
     setResult(null);
+    setComparison(null);
     setPlayback(null);
     setTrace(null);
+  };
+
+  const evaluateScenario = (scenario, targetDeploy, stress = false) => {
+    const targetAnalysis = E.analyzeBuild(docs.build);
+    const targetCheck = E.validateDeploy(docs.build, targetAnalysis, targetDeploy);
+    if (!targetCheck.valid) throw new Error(`“${targetDeploy.name}” is not ready to simulate.`);
+    const model = E.compileModel(docs.build, targetAnalysis, targetDeploy, targetCheck);
+    if (E.scenarioMode(targetAnalysis, scenario) === 'batch') return E.evaluateBatch(model, scenario);
+    const rate = E.evaluateRate(model, scenario, { N: 1500, seed: 11 });
+    const stressResult = stress ? E.stressTest(model, scenario) : null;
+    return stressResult ? { ...rate, stress: stressResult } : rate;
   };
 
   const runScenario = (stress = false) => {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
     if (!scenario || !canSimulate) return;
-    const model = E.compileModel(docs.build, analysis, deploy, deployCheck);
-    if (E.scenarioMode(analysis, scenario) === 'batch') {
-      setResult(E.evaluateBatch(model, scenario));
+    setResult(evaluateScenario(scenario, deploy, stress));
+    setComparison(null);
+  };
+
+  const compareDeploys = () => {
+    const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
+    if (!scenario || !canSimulate || !activeExample) return;
+    const [first, second] = activeExample.deploys;
+    const otherDeploy = deploy.id === first.id ? second : first;
+    const other = duplicate(otherDeploy);
+    E.normalizeDeploy(other);
+    const otherCheck = E.validateDeploy(docs.build, analysis, other);
+    if (!otherCheck.valid) {
+      setMessage(`“${other.name}” has deployment issues and cannot be compared.`);
       return;
     }
-    const rate = E.evaluateRate(model, scenario, { N: 1500, seed: 11 });
-    const stressResult = stress ? E.stressTest(model, scenario) : null;
-    setResult(stressResult ? { ...rate, stress: stressResult } : rate);
+    const currentResult = evaluateScenario(scenario, deploy);
+    const otherResult = evaluateScenario(scenario, other);
+    setResult(currentResult);
+    setComparison({
+      scenarioName: scenario.name,
+      left: { name: deploy.name, result: currentResult },
+      right: { name: other.name, result: otherResult }
+    });
+  };
+
+  const openExample = (example) => {
+    const build = duplicate(example.build);
+    const starterDeploy = duplicate(example.deploys[0]);
+    E.normalizeDeploy(starterDeploy);
+    commit((next) => {
+      next.build = build;
+      next.deploy = starterDeploy;
+      return next;
+    });
+    setScenarioId(build.scenarios[0]?.id || '');
+    setSelection(null);
+    setMode('build');
+    setExamplesOpen(false);
   };
 
   const startPlayback = () => {
@@ -387,6 +436,7 @@ function App() {
           })}
         </nav>
         <div className="header-actions">
+          <button type="button" className="button quiet" onClick={() => setExamplesOpen(true)}>Explore examples</button>
           <button type="button" className="button quiet" onClick={() => setDialog(true)}>Save &amp; load</button>
           <button type="button" className="button quiet" onClick={undo} disabled={!history.length}>Undo</button>
           <button type="button" className="button quiet" onClick={redo} disabled={!future.length}>Redo</button>
@@ -421,6 +471,9 @@ function App() {
           setScenarioId={selectScenario}
           result={result}
           runScenario={runScenario}
+          activeExample={activeExample}
+          comparison={comparison}
+          compareDeploys={compareDeploys}
           updateScenario={updateScenario}
           startNewScenario={startNewScenario}
           duplicateScenario={duplicateScenario}
@@ -442,6 +495,7 @@ function App() {
         onExport={exportDoc}
         onDelete={deleteSavedDoc}
       />}
+      {examplesOpen && <ExamplesDialog examples={SYSTEM_EXAMPLES} onClose={() => setExamplesOpen(false)} onOpen={openExample} />}
       <footer className="app-footer">
         <span>Learning model only · results are approximate, not production capacity estimates.</span>
         <span>Saved automatically in this browser.</span>
@@ -914,6 +968,25 @@ function LibraryDialog({ docs, library, onClose, onSave, onLoad, onExport, onDel
   );
 }
 
+function ExamplesDialog({ examples, onClose, onOpen }) {
+  return (
+    <div className="dialog-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="library-dialog examples-dialog" role="dialog" aria-modal="true" aria-labelledby="examples-title">
+        <div className="card-heading"><div><p className="eyebrow">Start exploring</p><h2 id="examples-title">Choose a system to experiment with</h2></div><button className="text-button" type="button" onClick={onClose}>Close</button></div>
+        <p className="helper-text">Each example opens a working Build, a starter Deploy and scenarios. Switch Deploys and compare the results.</p>
+        <div className="example-list">
+          {examples.map((example) => (
+            <article className="example-card" key={example.id}>
+              <div><h3>{example.name}</h3><p>{example.summary}</p><small>Try this: {example.lesson}</small></div>
+              <button type="button" className="button primary" onClick={() => onOpen(example)}>Open example</button>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function DeployMode({ build, deploy, check, updateDeploy }) {
   const assignedWorkloads = Object.fromEntries(deploy.compute.flatMap((item) => item.workloads.map((name) => [name, item.id])));
   const assignedData = Object.fromEntries(deploy.stores.flatMap((item) => item.data.map((name) => [name, item.id])));
@@ -1043,6 +1116,7 @@ function DeployMode({ build, deploy, check, updateDeploy }) {
 
 function SimulateMode({
   build, analysis, deploy, check, scenarioId, setScenarioId, result, runScenario,
+  activeExample, comparison, compareDeploys,
   updateScenario, startNewScenario, duplicateScenario, deleteScenario, startPlayback,
   playback, setPlayback, trace, setTrace, startTrace
 }) {
@@ -1093,6 +1167,7 @@ function SimulateMode({
           <div className="scenario-actions"><button type="button" className="button quiet" onClick={startNewScenario}>New</button><button type="button" className="button quiet" disabled={!scenario} onClick={duplicateScenario}>Duplicate</button><button type="button" className="button quiet" disabled={!scenario} onClick={deleteScenario}>Delete</button></div>
           <button type="button" className="button primary" disabled={!scenario || !check?.valid} onClick={() => runScenario(false)}>Run simulation</button>
           {mode === 'rate' && <button type="button" className="button quiet" disabled={!scenario || !check?.valid} onClick={() => runScenario(true)}>Find max throughput</button>}
+          {activeExample && <button type="button" className="button quiet" disabled={!scenario || !check?.valid} onClick={compareDeploys}>Compare designs</button>}
         </div>
         {scenario && <div className="scenario-editor">
           <label className="field-label">Entry point<select value={scenario.entry} onChange={(event) => setField('entry', event.target.value)}>{analysis.entries.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
@@ -1109,6 +1184,7 @@ function SimulateMode({
         {scenario && mode === 'rate' && <section className="scenario-subsection"><h3>Where requests come from</h3><div className="scenario-editor origin-editor">{Object.entries(E.POPS).map(([key, pop]) => <label className="field-label" key={key}>{pop.label} (%)<input type="number" min="0" max="100" value={scenario.origins?.[key] || 0} onChange={(event) => updateScenario(scenario.id, (item) => { item.origins = { ...(item.origins || {}), [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }; })} /></label>)}</div></section>}
         {conditions.length > 0 && <section className="scenario-subsection"><h3>Branch choices</h3><p className="helper-text">Override the chance that each condition is true for this scenario.</p>{conditions.map((condition) => <label className="odds-control" key={condition.key}><span>{condition.w}.{condition.h}: {condition.cond}</span><input type="range" min="0" max="100" step="1" value={Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { item.odds = { ...(item.odds || {}), [condition.key]: Number(event.target.value) / 100 }; })} /><strong>{Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)}%</strong><button className="text-button" type="button" onClick={() => updateScenario(scenario.id, (item) => { delete item.odds?.[condition.key]; })}>Reset</button></label>)}</section>}
       </div>
+      {comparison && <ComparisonPanel comparison={comparison} />}
       {result ? (
         <div className="results">
           {result.mode === 'rate' ? (
@@ -1159,6 +1235,39 @@ function SimulateMode({
         <div className="trace-step"><strong>{traceStep.label}</strong><p>{traceStep.why || traceStep.kind}</p><small>{Math.round(traceStep.dur)} ms{traceStep.wait > 0.5 ? ` · ${Math.round(traceStep.wait)} ms waiting` : ''}{traceStep.rho != null ? ` · ${Math.round(traceStep.rho * 100)}% busy` : ''}</small></div>
         <ol className="trace-steps">{trace.steps.map((item, index) => <li className={index === trace.index ? 'current' : index < trace.index ? 'complete' : ''} key={`${item.label}-${index}`}><button type="button" onClick={() => setTrace((state) => ({ ...state, index }))}><span>{item.label}</span><strong>{index <= trace.index ? `${Math.round(item.dur)} ms` : '—'}</strong></button></li>)}</ol>
       </section>}
+    </section>
+  );
+}
+
+function ComparisonPanel({ comparison }) {
+  const { left, right } = comparison;
+  const isRate = left.result.mode === 'rate' && right.result.mode === 'rate';
+  const metrics = isRate
+    ? [
+      { label: 'p99 latency', left: `${Math.round(left.result.p99)} ms`, right: `${Math.round(right.result.p99)} ms`, a: left.result.p99, b: right.result.p99 },
+      { label: 'System failures', left: `${(left.result.sysErr * 100).toFixed(2)}%`, right: `${(right.result.sysErr * 100).toFixed(2)}%`, a: left.result.sysErr, b: right.result.sysErr },
+      { label: 'Estimated cost', left: `$${left.result.cost.toFixed(2)}/h`, right: `$${right.result.cost.toFixed(2)}/h`, a: left.result.cost, b: right.result.cost }
+    ]
+    : [
+      { label: 'Finish time', left: `${Math.ceil(left.result.finishS / 60)} min`, right: `${Math.ceil(right.result.finishS / 60)} min`, a: left.result.finishS, b: right.result.finishS },
+      { label: 'Rows completed', left: (left.result.done || 0).toLocaleString(), right: (right.result.done || 0).toLocaleString(), a: left.result.done || 0, b: right.result.done || 0 }
+    ];
+  const leadMetric = metrics[0];
+  const faster = leadMetric.a === leadMetric.b ? 'Both designs have the same modeled result for this measure.' : `${leadMetric.b < leadMetric.a ? right.name : left.name} has the lower ${leadMetric.label.toLowerCase()} (${Math.abs(Math.round((leadMetric.b - leadMetric.a) / (leadMetric.a || 1) * 100))}% lower).`;
+  const limiting = (result) => result.mode === 'rate'
+    ? result.ranked?.[0]?.[1]?.ref?.name || result.ranked?.[0]?.[1]?.name || 'no single saturated resource'
+    : result.limits?.[0]?.what || 'workload path';
+  return (
+    <section className="explanation-card comparison-card" aria-label="Design comparison">
+      <div className="card-heading"><div><p className="eyebrow">What-if comparison · {comparison.scenarioName}</p><h2>Same scenario, two Deploys</h2></div></div>
+      <div className="comparison-table-wrap">
+        <table className="comparison-table">
+          <thead><tr><th scope="col">Measure</th><th scope="col">{left.name} (current)</th><th scope="col">{right.name}</th></tr></thead>
+          <tbody>{metrics.map((metric) => <tr key={metric.label}><th scope="row">{metric.label}</th><td>{metric.left}</td><td>{metric.right}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <p>{faster}</p>
+      <p className="comparison-limits">The first design is mainly limited by {limiting(left.result)}; the second by {limiting(right.result)}. These are directional learning estimates.</p>
     </section>
   );
 }

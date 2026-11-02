@@ -1,0 +1,82 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-social-network-simple",
+  "name": "Single-region starter",
+  "regions": [
+    "use1"
+  ],
+  "peering": false,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-social-network-simple",
+      "name": "app",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Small",
+      "min": 2,
+      "max": 8,
+      "workloads": [
+        "SocialAPI",
+        "FeedWorker"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-social-network-simple-0",
+      "name": "social-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Posts",
+        "Follows"
+      ]
+    },
+    {
+      "id": "s-social-network-simple-1",
+      "name": "feed-cache",
+      "type": "redis",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Feeds"
+      ]
+    },
+    {
+      "id": "s-social-network-simple-2",
+      "name": "feed-stream",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "FeedEvents"
+      ]
+    }
+  ]
+}

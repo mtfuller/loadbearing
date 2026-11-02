@@ -1,0 +1,84 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-food-delivery-simple",
+  "name": "Single-region starter",
+  "regions": [
+    "use1"
+  ],
+  "peering": false,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-food-delivery-simple",
+      "name": "app",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Small",
+      "min": 2,
+      "max": 8,
+      "workloads": [
+        "MarketplaceAPI",
+        "Dispatch",
+        "CourierAPI"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-food-delivery-simple-0",
+      "name": "marketplace-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Restaurants",
+        "Menus",
+        "Orders"
+      ]
+    },
+    {
+      "id": "s-food-delivery-simple-1",
+      "name": "order-queue",
+      "type": "queue",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "OrderEvents"
+      ]
+    },
+    {
+      "id": "s-food-delivery-simple-2",
+      "name": "location-store",
+      "type": "kv",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "CourierLocations"
+      ]
+    }
+  ]
+}

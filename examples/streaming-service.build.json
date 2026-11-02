@@ -1,0 +1,161 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-streaming-service",
+  "name": "Streaming service",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "PlaybackAPI",
+      "x": 20,
+      "y": 80,
+      "code": "when Browse {\n  read Catalog by category many 20\n}\n\nwhen Play {\n  read Catalog by title_id\n  read Manifests by title_id\n  publish ViewEvents\n}"
+    },
+    {
+      "id": "w2",
+      "name": "Transcoder",
+      "x": 300,
+      "y": 320,
+      "code": "when file Uploads {\n  for each video in file parallel 10 {\n    insert Manifests\n  }\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "Catalog",
+      "kind": "table",
+      "x": 760,
+      "y": 120,
+      "rows": 2000000,
+      "rowKB": 0.5,
+      "fields": [
+        {
+          "name": "title_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "name",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "Manifests",
+      "kind": "table",
+      "x": 500,
+      "y": 210,
+      "rows": 2000000,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "title_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "manifest_url",
+          "type": "text"
+        },
+        {
+          "name": "duration",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "name": "VideoObjects",
+      "kind": "blob",
+      "x": 760,
+      "y": 300,
+      "rows": 20000000,
+      "rowKB": 12000,
+      "fields": [
+        {
+          "name": "title_id",
+          "type": "uuid"
+        },
+        {
+          "name": "rendition",
+          "type": "text"
+        },
+        {
+          "name": "bytes",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "name": "ViewEvents",
+      "kind": "stream",
+      "x": 500,
+      "y": 390,
+      "rows": 0,
+      "rowKB": 0.3,
+      "fields": [
+        {
+          "name": "title_id",
+          "type": "uuid"
+        },
+        {
+          "name": "viewer_id",
+          "type": "uuid"
+        }
+      ],
+      "partitionKey": "title_id"
+    },
+    {
+      "id": "d5",
+      "name": "Uploads",
+      "kind": "file",
+      "x": 760,
+      "y": 480,
+      "rows": 20000,
+      "rowKB": 12000,
+      "fields": [
+        {
+          "name": "title_id",
+          "type": "uuid"
+        },
+        {
+          "name": "bytes",
+          "type": "int"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc-stream-browse",
+      "name": "Friday night viewing",
+      "entry": "PlaybackAPI.Browse",
+      "count": 18000000,
+      "durationMin": 60,
+      "burst": "peak",
+      "origins": {
+        "na": 45,
+        "eu": 30,
+        "asia": 25
+      },
+      "odds": {},
+      "goalMs": 300
+    },
+    {
+      "id": "sc-stream-transcode",
+      "name": "New release transcode",
+      "entry": "Transcoder.file Uploads",
+      "rows": 20000,
+      "goalMin": 180,
+      "origins": {},
+      "odds": {}
+    }
+  ]
+}

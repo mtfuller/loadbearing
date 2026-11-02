@@ -1,0 +1,178 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-food-delivery",
+  "name": "Food delivery marketplace",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "MarketplaceAPI",
+      "x": 20,
+      "y": 80,
+      "code": "when SearchRestaurants {\n  read Restaurants by city_id many 50\n}\n\nwhen PlaceOrder {\n  read Menus by restaurant_id many 10\n  insert Orders\n  publish OrderEvents\n}"
+    },
+    {
+      "id": "w2",
+      "name": "Dispatch",
+      "x": 300,
+      "y": 320,
+      "code": "when message OrderEvents {\n  read CourierLocations by zone_id many 20\n  update Orders\n}"
+    },
+    {
+      "id": "w3",
+      "name": "CourierAPI",
+      "x": 20,
+      "y": 500,
+      "code": "when UpdateLocation {\n  upsert CourierLocations\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "Restaurants",
+      "kind": "table",
+      "x": 760,
+      "y": 120,
+      "rows": 5000000,
+      "rowKB": 1,
+      "fields": [
+        {
+          "name": "restaurant_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "city_id",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "zone_id",
+          "type": "text",
+          "index": true
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "Menus",
+      "kind": "document",
+      "x": 500,
+      "y": 210,
+      "rows": 5000000,
+      "rowKB": 2,
+      "fields": [
+        {
+          "name": "restaurant_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "items",
+          "type": "json"
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "name": "Orders",
+      "kind": "table",
+      "x": 760,
+      "y": 300,
+      "rows": 5000000000,
+      "rowKB": 0.7,
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "restaurant_id",
+          "type": "uuid",
+          "index": true
+        },
+        {
+          "name": "status",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "name": "OrderEvents",
+      "kind": "queue",
+      "x": 500,
+      "y": 390,
+      "rows": 0,
+      "rowKB": 0.3,
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "uuid"
+        },
+        {
+          "name": "zone_id",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d5",
+      "name": "CourierLocations",
+      "kind": "kv",
+      "x": 760,
+      "y": 480,
+      "rows": 2000000,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "courier_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "zone_id",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc-food-dinner",
+      "name": "Dinner rush",
+      "entry": "MarketplaceAPI.SearchRestaurants",
+      "count": 6000000,
+      "durationMin": 60,
+      "burst": "peak",
+      "origins": {
+        "na": 70,
+        "eu": 20,
+        "asia": 10
+      },
+      "odds": {},
+      "goalMs": 350
+    },
+    {
+      "id": "sc-food-orders",
+      "name": "Order and dispatch surge",
+      "entry": "MarketplaceAPI.PlaceOrder",
+      "count": 1200000,
+      "durationMin": 30,
+      "burst": "ramp",
+      "origins": {
+        "na": 70,
+        "eu": 20,
+        "asia": 10
+      },
+      "odds": {},
+      "goalMs": 500
+    }
+  ]
+}

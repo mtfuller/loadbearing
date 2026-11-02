@@ -1,0 +1,83 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-streaming-service-simple",
+  "name": "Single-region starter",
+  "regions": [
+    "use1"
+  ],
+  "peering": false,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-streaming-service-simple",
+      "name": "app",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Small",
+      "min": 2,
+      "max": 8,
+      "workloads": [
+        "PlaybackAPI",
+        "Transcoder"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-streaming-service-simple-0",
+      "name": "catalog-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Catalog",
+        "Manifests"
+      ]
+    },
+    {
+      "id": "s-streaming-service-simple-1",
+      "name": "video-store",
+      "type": "objects",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "VideoObjects",
+        "Uploads"
+      ]
+    },
+    {
+      "id": "s-streaming-service-simple-2",
+      "name": "view-stream",
+      "type": "kafka",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ViewEvents"
+      ]
+    }
+  ]
+}
