@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { WorldMap, ViewToggle, useCanvasView } from './world-map.jsx';
 import { InfraCanvas, Legend, resourceFor, startDrag, endDrag } from './infra-canvas.jsx';
 
 const E = window.Loadbearing;
@@ -58,6 +59,7 @@ export function DeployMode({ build, analysis, deploy, check, updateDeploy }) {
 
   const homeRegion = selected && selected.region !== 'outside' ? selected.region : deploy.regions[0];
   const say = (text) => setNotice(text);
+  const [view, setView] = useCanvasView();
 
   const placeWorkload = (name, computeId) => {
     const target = deploy.compute.find((item) => item.id === computeId);
@@ -105,6 +107,11 @@ export function DeployMode({ build, analysis, deploy, check, updateDeploy }) {
     }
   };
   const dropOnRegion = (region, payload) => {
+    if (payload.type === 'moveNode') {
+      const gnode = graph.byKey[payload.key];
+      if (gnode && region && gnode.region !== region.id) moveNode({ gnode, region, position: { x: gnode.x, y: gnode.y } });
+      return;
+    }
     if (payload.type === 'newCompute' || payload.type === 'newStore' || payload.type === 'net') return addAt(payload, region?.id);
     const kind = payload.type === 'workload' ? 'compute' : 'store';
     const candidates = graph.nodes.filter((node) => node.kind === kind && (!region || node.region === region.id));
@@ -197,18 +204,26 @@ export function DeployMode({ build, analysis, deploy, check, updateDeploy }) {
         <div className="canvas-toolbar">
           <div><strong>{deploy.name}</strong><span>{deploy.regions.length} regions · {deploy.compute.length} compute · {deploy.stores.length} stores</span></div>
           <div className="toolbar-status">
+            <ViewToggle view={view} onChange={setView} />
             <button className="button quiet" type="button" onClick={autoPlace}>Auto-place everything</button>
-            <button className="button quiet" type="button" onClick={resetLayout}>Tidy layout</button>
+            {view === 'diagram' && <button className="button quiet" type="button" onClick={resetLayout}>Tidy layout</button>}
             <span className={`pill ${check?.valid ? 'success' : 'danger'}`}>{check?.valid ? 'Deployment works' : `${check?.errors || 0} issues`}</span>
           </div>
         </div>
         {notice && <div className="deploy-notice" role="status">{notice}<button type="button" className="text-button" onClick={() => setNotice('')}>Dismiss</button></div>}
-        <InfraCanvas
-          label="Infrastructure editor"
-          graph={graph} build={build} deploy={deploy} editable
-          selectedKey={selectedKey} onSelect={setSelectedKey} problemsByNode={problemsByNode}
-          onDropOnNode={dropOnNode} onDropOnRegion={dropOnRegion} onRemoveChip={removeChip} onMoveNode={moveNode} onConnect={connect}
-        />
+        {view === 'map'
+          ? <WorldMap
+            label="Infrastructure map editor"
+            graph={graph} build={build} deploy={deploy} editable
+            selectedKey={selectedKey} onSelect={setSelectedKey} problemsByNode={problemsByNode}
+            onDropOnNode={dropOnNode} onDropOnRegion={dropOnRegion} onToggleRegion={toggleRegion}
+          />
+          : <InfraCanvas
+            label="Infrastructure editor"
+            graph={graph} build={build} deploy={deploy} editable
+            selectedKey={selectedKey} onSelect={setSelectedKey} problemsByNode={problemsByNode}
+            onDropOnNode={dropOnNode} onDropOnRegion={dropOnRegion} onRemoveChip={removeChip} onMoveNode={moveNode} onConnect={connect}
+          />}
         <Legend />
         <section className="problems-panel deploy-checks" aria-label="Deployment checks">
           <div className="card-heading"><div><h2>Deployment checks</h2><p>Issues below can block simulation; fixes update the configuration.</p></div></div>

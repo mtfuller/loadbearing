@@ -230,7 +230,7 @@ function autoPlace(B, A, Dp) {
 /* ---------- the infrastructure picture (shared by the Deploy and Simulate canvases) ---------- */
 // Node keys match the boxes the simulator reports: c:<compute>@<region>, s:<store>@<region>,
 // e:<region> (public entry), n:<region> (NAT), p:<region> (private endpoints), x:<external>, u:<pop> (users).
-const GRAPH = { nodeW: 232, chip: 24, head: 76, gap: 16, pad: 22, regionHead: 46, colEntry: 22, colCompute: 300, colStore: 610, outsideW: 210, regionGap: 70 }; // canvas geometry, in px
+const GRAPH = { nodeW: 232, chip: 24, head: 76, gap: 16, pad: 22, regionHead: 46, colEntry: 22, colCompute: 350, colStore: 678, outsideW: 210, regionGap: 70 }; // canvas geometry, in px
 function chipCount(n) { return Math.max(1, n); }
 function deployGraph(B, A, Dp, opts) {
   opts = opts || {}; const layout = Dp.layout || {};
@@ -300,26 +300,42 @@ function deployGraph(B, A, Dp, opts) {
     else (entryComputes[o.region] || []).forEach(k => addEdge('u:' + o.pop, k, 'user', 'requests'));
   });
   Object.keys(opts.links || {}).forEach(k => { const p = k.split('|'); addEdge(p[0], p[1], p[2] === 'deliver' ? 'deliver' : p[2], p[2]); });
-  // layout: three columns per region (entry and network, compute, data), regions two to a row
+  // layout: layered left to right (entry and network, compute, data). Rows are ordered by the average row of
+  // their neighbours in the previous column so wires stay short and cross as little as possible; regions are stacked as lanes.
   const regionBox = {}; const rIds = Dp.regions.filter(r => REGIONS[r]);
+  const neighbours = (n, cols) => edges.filter(e => e.from === n.key || e.to === n.key).map(e => byKey[e.from === n.key ? e.to : e.from]).filter(m => m && m.region === n.region && cols.includes(m.col));
   const place = (list, region) => {
-    const cols = { entry: GRAPH.colEntry, compute: GRAPH.colCompute, store: GRAPH.colStore }; const y = { entry: GRAPH.regionHead, compute: GRAPH.regionHead, store: GRAPH.regionHead };
+    const cols = { entry: GRAPH.colEntry, compute: GRAPH.colCompute, store: GRAPH.colStore };
+    const order = ['entry', 'compute', 'store']; const done = [];
     let w = 0, h = 0;
+    order.forEach((col, ci) => {
+      const mine = list.filter(n => (region === 'outside' ? 'entry' : n.col) === col);
+      const prev = order.slice(0, ci);
+      const want = n => { const nb = neighbours(n, prev).filter(m => m.autoY != null); return nb.length ? nb.reduce((t, m) => t + m.autoY + m.h / 2, 0) / nb.length : null; };
+      const keyed = mine.map((n, i) => ({ n, i, want: want(n) }));
+      keyed.sort((a, b) => (a.want == null ? 1e9 + a.i : a.want) - (b.want == null ? 1e9 + b.i : b.want));
+      let y = GRAPH.regionHead;
+      keyed.forEach(k => { const n = k.n; const ideal = k.want == null ? y : Math.round(k.want - n.h / 2); n.autoY = Math.max(y, ideal); y = n.autoY + n.h + GRAPH.gap; });
+    });
     list.forEach(n => {
-      const o = layout[n.key]; const col = region === 'outside' ? 'entry' : n.col; const auto = { x: region === 'outside' ? 20 : cols[col], y: y[col] };
-      n.x = o ? o.x : auto.x; n.y = o ? o.y : auto.y; y[col] += n.h + GRAPH.gap;
+      const o = layout[n.key]; const col = region === 'outside' ? 'entry' : n.col;
+      n.x = o ? o.x : (region === 'outside' ? 20 : cols[col]); n.y = o ? o.y : n.autoY; delete n.autoY;
       w = Math.max(w, n.x + n.w + GRAPH.pad); h = Math.max(h, n.y + n.h + GRAPH.pad);
     });
     return { w: Math.max(w, 300), h: Math.max(h, 160) };
   };
   const outsideNodes = nodes.filter(n => n.region === 'outside');
   const outside = outsideNodes.length ? place(outsideNodes, 'outside') : null;
-  let ox = outside ? GRAPH.outsideW + GRAPH.regionGap : 0, rowY = 0, rowH = 0;
+  const ox = outside ? GRAPH.outsideW + GRAPH.regionGap : 0;
+  // regions are packed in shelves no wider than the widest one, so small regions sit side by side
+  const sizes = rIds.map(r => place(nodes.filter(n => n.region === r), r));
+  const shelfW = Math.max(300, ...sizes.map(z => z.w));
+  let cx = 0, rowY = 0, rowH = 0;
   const regions = rIds.map((r, i) => {
-    const mine = nodes.filter(n => n.region === r); const size = place(mine, r);
-    if (i % 2 === 0 && i > 0) { rowY += rowH + GRAPH.regionGap; rowH = 0; ox = outside ? GRAPH.outsideW + GRAPH.regionGap : 0; }
-    const auto = { x: ox, y: rowY }; const o = layout['r:' + r]; const pos = o || auto;
-    ox += size.w + GRAPH.regionGap; rowH = Math.max(rowH, size.h);
+    const size = sizes[i];
+    if (cx > 0 && cx + size.w > shelfW) { rowY += rowH + GRAPH.regionGap; cx = 0; rowH = 0; }
+    const auto = { x: ox + cx, y: rowY }; const o = layout['r:' + r]; const pos = o || auto;
+    cx += size.w + GRAPH.regionGap; rowH = Math.max(rowH, size.h);
     regionBox[r] = Object.assign({ id: r, key: 'r:' + r, code: regionLabel(r), city: REGIONS[r].city }, pos, size);
     return regionBox[r];
   });

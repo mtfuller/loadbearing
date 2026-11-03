@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { WorldMap, ViewToggle, useCanvasView } from './world-map.jsx';
 import { InfraCanvas, Legend, HEAT_WORDS } from './infra-canvas.jsx';
 
 const E = window.Loadbearing;
@@ -23,7 +24,8 @@ function traceHighlight(graph, trace) {
   return { nodes: [...nodes], edges };
 }
 
-export function SimulateCanvas({ build, analysis, deploy, result, playback, trace }) {
+export function SimulateCanvas({ build, analysis, deploy, result, playback, trace, offline = [], onToggleOffline }) {
+  const [view, setView] = useCanvasView();
   const [focusKey, setFocusKey] = useState(null);
   const frame = playback?.timeline.frames[playback.index];
   const snap = frame || (result?.mode === 'rate' ? result : null);
@@ -44,15 +46,23 @@ export function SimulateCanvas({ build, analysis, deploy, result, playback, trac
       <div className="canvas-toolbar">
         <div>
           <strong>Traffic through your infrastructure</strong>
-          <span>{highlight ? 'The highlighted path is the step you are viewing.' : snap ? 'Line thickness shows requests per second; node bars show how busy each resource is.' : 'Run a scenario to see traffic and load on each resource.'}</span>
+          <span>{highlight ? 'The highlighted path is the step you are viewing.' : snap ? `${snap.live ? 'Live estimate, updates as you edit. ' : ''}Line thickness shows requests per second; node bars show how busy each resource is.` : 'Run a scenario to see traffic and load on each resource.'}</span>
         </div>
+        <ViewToggle view={view} onChange={setView} />
       </div>
-      <InfraCanvas
-        label="Infrastructure traffic view"
-        graph={graph} build={build} deploy={deploy} states={states} traffic={traffic}
-        trace={highlight} motion={!!snap} speed={playback?.speed || 1}
-        selectedKey={focusKey} onSelect={setFocusKey}
-      />
+      {view === 'map'
+        ? <WorldMap
+          label="Infrastructure traffic map"
+          graph={graph} build={build} deploy={deploy} states={states} traffic={traffic}
+          trace={highlight} motion={!!snap} selectedKey={focusKey} onSelect={setFocusKey}
+          offline={offline} onToggleOffline={onToggleOffline}
+        />
+        : <InfraCanvas
+          label="Infrastructure traffic view"
+          graph={graph} build={build} deploy={deploy} states={states} traffic={traffic}
+          trace={highlight} motion={!!snap} speed={playback?.speed || 1}
+          selectedKey={focusKey} onSelect={setFocusKey}
+        />}
       <Legend showHeat />
       <div className="sim-why" role="status">
         {focused

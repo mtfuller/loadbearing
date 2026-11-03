@@ -14,6 +14,8 @@ window.Loadbearing = {
   fmtN,
   GRAPH,
   netRegion,
+  rtt,
+  popRtt,
   conditionsFor,
   compileModel,
   enumeratePaths,

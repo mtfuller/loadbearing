@@ -55,6 +55,14 @@ async function main() {
     await fnNode.click();
     await page.getByLabel('Compute type').waitFor();
     await page.getByLabel(/^Run New workload on /).isChecked();
+    // world map view of the same deployment: regions at their locations, add a region from the map
+    await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'World map' }).click();
+    const worldMap = page.getByTestId('world-map');
+    await worldMap.locator('.map-region').first().waitFor();
+    await worldMap.getByRole('button', { name: 'Add region eu-west-1' }).click();
+    await worldMap.locator('.map-region[data-region="euw1"]').waitFor();
+    await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'Diagram' }).click();
+    await page.getByTestId('infra-canvas').locator('[data-region="euw1"]').first().waitFor();
     await page.getByRole('button', { name: 'Simulate' }).click();
     await page.getByRole('heading', { name: 'See what happens under load' }).waitFor();
     await page.getByRole('button', { name: 'Run simulation' }).click();
@@ -73,6 +81,20 @@ async function main() {
     await simCanvas.locator('.infra-node.trace-active').first().waitFor();
     await page.locator('.trace-panel').getByRole('button', { name: 'Step' }).click();
     await page.locator('.trace-panel').getByRole('button', { name: 'Close' }).click();
+
+    // live playground: changing a scenario value updates the metrics with no Run
+    const p50 = page.locator('.metric-grid').first().locator('strong').first();
+    const p50Before = await p50.innerText();
+    await page.getByLabel('Latency goal (ms)').first().waitFor();
+    await page.locator('.sim-sidebar').getByText('Requests', { exact: true }).locator('input').fill('900000000');
+    await page.waitForFunction((before) => document.querySelector('.metric-grid strong')?.textContent !== before, p50Before);
+    await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'World map' }).click();
+    await page.getByTestId('world-map').locator('.map-region').first().waitFor();
+    await page.getByRole('button', { name: /^Take .* offline$/ }).first().click();
+    await page.getByText(/stops working/).first().waitFor();
+    await page.getByRole('button', { name: /^Bring .* back online$/ }).first().click();
+    await page.getByTestId('world-map').locator('.map-row .map-heat').first().waitFor();
+    await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'Diagram' }).click();
 
     await page.getByLabel('Select scenario').selectOption({ label: 'Product feed import' });
     await page.getByRole('button', { name: 'Run simulation' }).click();

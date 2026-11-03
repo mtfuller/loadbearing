@@ -76,6 +76,21 @@ function App() {
     [docs.build, analysis, deploy]
   );
   const canSimulate = !!deployCheck?.valid;
+  const [offline, setOffline] = useState([]);
+  const downRegions = useMemo(() => offline.filter((id) => deploy.regions.includes(id)), [offline, deploy]);
+  const simDeploy = useMemo(() => {
+    if (!downRegions.length) return deploy;
+    const copy = duplicate(deploy);
+    downRegions.forEach((id) => E.removeRegion(copy, id));
+    E.normalizeDeploy(copy);
+    return copy;
+  }, [deploy, downRegions]);
+  const simCheck = useMemo(
+    () => !downRegions.length ? deployCheck : (analysis.valid && simDeploy.regions.length ? E.validateDeploy(docs.build, analysis, simDeploy) : null),
+    [downRegions, deployCheck, docs.build, analysis, simDeploy]
+  );
+  const simOk = !!simCheck?.valid;
+  const toggleOffline = (id) => { setOffline((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); setPlayback(null); setTrace(null); setResult(null); setComparison(null); };
   const activeExample = SYSTEM_EXAMPLES.find((item) => item.build.id === docs.build.id);
 
   useEffect(() => {
@@ -202,8 +217,8 @@ function App() {
 
   const runScenario = (stress = false) => {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
-    if (!scenario || !canSimulate) return;
-    setResult(evaluateScenario(scenario, deploy, stress));
+    if (!scenario || !simOk) return;
+    setResult(evaluateScenario(scenario, simDeploy, stress));
     setComparison(null);
   };
 
@@ -246,16 +261,16 @@ function App() {
 
   const startPlayback = () => {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
-    if (!scenario || !canSimulate || E.scenarioMode(analysis, scenario) !== 'rate') return;
-    const model = E.compileModel(docs.build, analysis, deploy, deployCheck);
+    if (!scenario || !simOk || E.scenarioMode(analysis, scenario) !== 'rate') return;
+    const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
     setPlayback({ timeline: E.simulateTimeline(model, scenario, { frames: 48, N: 200 }), index: 0, speed: 1, playing: true });
     setTrace(null);
   };
 
   const startTrace = (pathIndex) => {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
-    if (!scenario || !canSimulate) return;
-    const model = E.compileModel(docs.build, analysis, deploy, deployCheck);
+    if (!scenario || !simOk) return;
+    const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
     const paths = E.enumeratePaths(analysis, scenario.entry, scenario.odds || {}, {
       fileRows: E.entryInfo(analysis, scenario.entry)?.type === 'file' ? scenario.rows || 1 : 1
     });
@@ -270,6 +285,17 @@ function App() {
     setTrace({ label: path.label, steps, index: 0 });
     setPlayback(null);
   };
+
+  // Live playground: any change to the scenario or deployment recomputes a quick result without pressing Run.
+  const liveScenario = docs.build.scenarios.find((item) => item.id === scenarioId);
+  useEffect(() => {
+    if (mode !== 'simulate' || !liveScenario || !simOk || E.scenarioMode(analysis, liveScenario) !== 'rate') return undefined;
+    const timer = window.setTimeout(() => {
+      const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
+      setResult((current) => (current && !current.live ? current : { ...E.evaluateRate(model, liveScenario, { N: 400, seed: 11 }), live: true }));
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [mode, liveScenario, docs.build, analysis, simDeploy, simCheck, simOk]);
 
   const startBuildStep = (key) => {
     if (!analysis.valid) return;
@@ -467,8 +493,11 @@ function App() {
         <SimulateMode
           build={docs.build}
           analysis={analysis}
-          deploy={deploy}
-          check={deployCheck}
+          deploy={simDeploy}
+          check={simCheck}
+          offline={downRegions}
+          toggleOffline={toggleOffline}
+          updateDeploy={updateDeploy}
           scenarioId={scenarioId}
           setScenarioId={selectScenario}
           result={result}
@@ -991,7 +1020,7 @@ function ExamplesDialog({ examples, onClose, onOpen }) {
 
 
 function SimulateMode({
-  build, analysis, deploy, check, scenarioId, setScenarioId, result, runScenario,
+  build, analysis, deploy, check, offline = [], toggleOffline, updateDeploy, scenarioId, setScenarioId, result, runScenario,
   activeExample, comparison, compareDeploys,
   updateScenario, startNewScenario, duplicateScenario, deleteScenario, startPlayback,
   playback, setPlayback, trace, setTrace, startTrace
@@ -1062,11 +1091,30 @@ function SimulateMode({
         </div>}
         {scenario && mode === 'rate' && <section className="scenario-subsection"><h3>Where requests come from</h3><div className="scenario-editor origin-editor">{Object.entries(E.POPS).map(([key, pop]) => <label className="field-label" key={key}>{pop.label} (%)<input type="number" min="0" max="100" value={scenario.origins?.[key] || 0} onChange={(event) => updateScenario(scenario.id, (item) => { item.origins = { ...(item.origins || {}), [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }; })} /></label>)}</div></section>}
         {conditions.length > 0 && <section className="scenario-subsection"><h3>Branch choices</h3><p className="helper-text">Override the chance that each condition is true for this scenario.</p>{conditions.map((condition) => <label className="odds-control" key={condition.key}><span>{condition.w}.{condition.h}: {condition.cond}</span><input type="range" min="0" max="100" step="1" value={Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { item.odds = { ...(item.odds || {}), [condition.key]: Number(event.target.value) / 100 }; })} /><strong>{Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)}%</strong><button className="text-button" type="button" onClick={() => updateScenario(scenario.id, (item) => { delete item.odds?.[condition.key]; })}>Reset</button></label>)}</section>}
+        <section className="scenario-subsection live-tweaks" aria-label="Playground controls">
+          <h3>Playground</h3>
+          <p className="helper-text">Change anything here and the picture updates right away. Regions can go offline to see what survives.</p>
+          <div className="region-toggles">{[...deploy.regions, ...offline].map((id) => {
+            const down = offline.includes(id);
+            return <button type="button" key={id} className={`region-toggle ${down ? '' : 'on'}`} aria-pressed={!down} aria-label={down ? `Bring ${E.REGIONS[id].code} back online` : `Take ${E.REGIONS[id].code} offline`} onClick={() => toggleOffline(id)}>{down ? '✕ ' : '✓ '}{E.REGIONS[id].code}{down ? ' offline' : ''}</button>;
+          })}</div>
+          {offline.length > 0 && !check?.valid && <p className="helper-text">With {offline.map((id) => E.REGIONS[id].code).join(', ')} offline this design stops working{check?.problems?.find((item) => item.sev === 'error') ? `: ${check.problems.find((item) => item.sev === 'error').msg}` : '.'}</p>}
+          {deploy.compute.filter((item) => item.type !== 'fn').map((item) => (
+            <div className="tweak-row" key={item.id}><span>{item.name}</span>
+              <label>Max instances<input type="number" min="1" aria-label={`Max instances for ${item.name}`} value={item.max ?? 1} onChange={(event) => updateDeploy((doc) => { const found = doc.compute.find((entry) => entry.id === item.id); if (found) { found.max = Math.max(1, Number(event.target.value) || 1); if ((found.min ?? 0) > found.max) found.min = found.max; } })} /></label>
+            </div>
+          ))}
+          {deploy.stores.filter((item) => E.STORES[item.type].shards).map((item) => (
+            <div className="tweak-row" key={item.id}><span>{item.name}</span>
+              <label>Shards<input type="number" min="1" max="64" aria-label={`Shards for ${item.name}`} value={item.shards || 1} onChange={(event) => updateDeploy((doc) => { const found = doc.stores.find((entry) => entry.id === item.id); if (found) found.shards = Math.max(1, Math.min(64, Number(event.target.value) || 1)); })} /></label>
+            </div>
+          ))}
+        </section>
           {mode === 'rate' && <button type="button" className="button quiet" disabled={!scenario || !check?.valid} onClick={startPlayback}>Play full scenario</button>}
         </div>
       </aside>
       <div className="canvas-column sim-main">
-        {check?.valid ? <SimulateCanvas build={build} analysis={analysis} deploy={deploy} result={result} playback={playback} trace={trace} /> : <div className="simulation-empty"><span className="simulation-symbol">!</span><strong>Fix your Deploy first</strong><span>Open Deploy and apply the fixes it suggests, then come back to run a scenario.</span></div>}
+        {check?.valid ? <SimulateCanvas build={build} analysis={analysis} deploy={deploy} result={result} playback={playback} trace={trace} offline={offline} onToggleOffline={toggleOffline} /> : <div className="simulation-empty"><span className="simulation-symbol">!</span><strong>Fix your Deploy first</strong><span>Open Deploy and apply the fixes it suggests, then come back to run a scenario.</span></div>}
       {comparison && <ComparisonPanel comparison={comparison} />}
       {playback && frame && <section className="playback-panel">
         <div className="card-heading"><div><p className="eyebrow">Scenario playback</p><h2>{Math.round(frame.t / 60)} min · {Math.round(frame.lam)} req/s</h2></div><button type="button" className="text-button" onClick={() => setPlayback(null)}>Close</button></div>

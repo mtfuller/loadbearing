@@ -503,3 +503,44 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 @media (max-width: 760px) { .sim-workspace { height: auto; grid-template-columns: 1fr; grid-template-rows: none; } .sim-sidebar { max-height: none; display: block; } .sim-main { overflow: visible; } }
 .sim-main > * { flex: none; }
 .sim-main .sim-canvas-panel .infra-canvas { height: clamp(380px, 58vh, 640px); }
+
+/* View toggle and world map */
+.view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.view-toggle button { border: 0; background: var(--surface-alt); color: var(--ink); padding: 5px 11px; font-size: 12px; }
+.view-toggle button.on { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.world-map-wrap { position: relative; overflow: hidden; height: clamp(380px, 58vh, 640px); background: var(--node-bg); }
+.deploy-workspace .world-map-wrap { height: clamp(380px, 56vh, 620px); }
+.world-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.world-svg { position: absolute; inset: 0; }
+.world-grid { stroke: var(--grid); stroke-width: 1; }
+.world-land { fill: var(--region-bg); stroke: var(--region-line); stroke-width: 1.5; }
+.world-leader { stroke: var(--region-line); stroke-dasharray: 3 4; }
+.world-dot { fill: var(--accent); }
+.map-arc { stroke: var(--edge); stroke-width: 2; }
+.map-arc.edge-live { stroke: var(--edge-live); stroke-width: 3.5; }
+.map-arc.edge-active { stroke: var(--edge-live); stroke-width: 5; }
+.map-arc-label { position: absolute; transform: translate(-50%, -50%); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 11px; white-space: nowrap; z-index: 3; }
+.map-arc-label.active { border-color: var(--edge-live); font-weight: 700; }
+.map-region { position: absolute; z-index: 2; box-sizing: border-box; border: 1px solid var(--region-line); border-radius: 10px; background: var(--surface); padding: 6px 8px; overflow: hidden; }
+.map-region header { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+.map-region header span { color: var(--muted); font-size: 12px; flex: 1; }
+.map-region .map-nets { display: block; color: var(--muted); font-size: 11px; }
+.map-row { display: grid; grid-template-columns: 16px 1fr auto; grid-template-areas: "i n h" "i d h"; align-items: center; column-gap: 6px; box-sizing: border-box; height: 34px; margin-top: 4px; padding: 1px 6px; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; background: var(--node-bg); font-size: 12px; cursor: pointer; }
+.map-row > span { grid-area: i; }
+.map-row strong { grid-area: n; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-row small { grid-area: d; color: var(--muted); font-size: 10px; }
+.map-row .map-heat { grid-area: h; font-size: 10px; }
+.map-row .problem-badge { grid-area: d; justify-self: end; }
+.map-row.heat-low { border-left-color: var(--heat-low); }
+.map-row.heat-medium { border-left-color: var(--heat-medium); }
+.map-row.heat-high { border-left-color: var(--heat-high); }
+.map-row.heat-over { border-left-color: var(--heat-over); }
+.map-row.selected, .map-row.trace-active { outline: 2px solid var(--accent); }
+.map-pin { position: absolute; z-index: 3; transform: translate(-50%, -50%); background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.map-ghost { position: absolute; z-index: 1; transform: translate(-50%, -50%); border: 1px dashed var(--region-line); border-radius: 999px; background: var(--surface); color: var(--muted); padding: 2px 9px; font-size: 11px; white-space: nowrap; }
+.map-ghost.offline { color: var(--heat-over); border-color: var(--heat-over); z-index: 3; }
+button.map-ghost:hover { color: var(--accent); border-color: var(--accent); }
+.live-tweaks { margin-top: 12px; }
+.tweak-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; margin-top: 6px; }
+.tweak-row label { display: flex; align-items: center; gap: 6px; }
+.tweak-row input { width: 64px; }

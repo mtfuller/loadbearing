@@ -138,4 +138,13 @@ test('traffic and heat map onto canvas wires and nodes', () => {
   const r = E(`(() => { const d = deps[0]; normalizeDeploy(d); const M = compileModel(B, A, d, validateDeploy(B, A, d)); const res = evaluateRate(M, B.scenarios[0], { N: 300, seed: 11 }); const g = deployGraph(B, A, d, { origins: res.origins.filter(o => o.pop), links: res.links }); const t = trafficFor(g, res); const sum = Object.values(t).reduce((a, b) => a + b, 0); const top = res.ranked[0][0]; const h = heatFor(top.replace(/^g:/, 'e:'), res.R); return [sum > 0, Object.keys(t).every(id => g.edges.some(e => e.id === id)), !!h, heatLevel(2), g.nodes.some(n => n.kind === 'user')]; })()`);
   assert.strictEqual(JSON.stringify(r), '[true,true,true,"over",true]');
 });
+test('auto layout never overlaps and is deterministic on every example', () => {
+  const r = E(`(() => { const bad = []; exampleSystems().forEach(ex => { const A2 = analyzeBuild(ex.build); ex.deploys.forEach(d => { normalizeDeploy(d); const run = () => deployGraph(ex.build, A2, d, { origins: [{ pop: 'na', region: d.regions[0] }, { pop: 'eu', region: d.regions[d.regions.length - 1] }] });
+    const g = run(); const g2 = run(); if (JSON.stringify(g.nodes.map(n => [n.x, n.y])) !== JSON.stringify(g2.nodes.map(n => [n.x, n.y]))) bad.push(d.name + ' not deterministic');
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    g.regions.forEach(rg => { const ns = g.nodes.filter(n => n.region === rg.id); ns.forEach((a, i) => { if (a.x + a.w > rg.w || a.y + a.h > rg.h) bad.push(d.name + ' node outside region'); ns.slice(i + 1).forEach(b => { if (hit(a, b)) bad.push(d.name + ' ' + a.key + ' overlaps ' + b.key); }); }); });
+    g.regions.forEach((a, i) => g.regions.slice(i + 1).forEach(b => { if (hit(a, b)) bad.push(d.name + ' regions overlap'); }));
+  }); }); return bad; })()`);
+  assert.strictEqual(JSON.stringify(r), '[]');
+});
 console.log(`\n${n} passed${process.exitCode ? ', some failed' : ''}`);
