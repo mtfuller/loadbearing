@@ -1029,9 +1029,12 @@ function SimulateMode({
   const frame = playback?.timeline.frames[playback.index];
   const traceStep = trace?.steps[trace.index];
   return (
-    <section className="mode-page simulate-page">
-      <div className="page-heading"><div><p className="eyebrow">Simulate</p><h1>See what happens under load</h1><p>Shape a workload scenario, model its bottlenecks, then inspect playback or one request.</p></div><span className={`pill ${check?.valid ? 'success' : 'danger'}`}>{check?.valid ? 'Ready to simulate' : 'Fix Deploy issues first'}</span></div>
-      <div className="scenario-card">
+    <section className="workspace sim-workspace">
+      <aside className="sidebar sim-sidebar">
+        <div className="sidebar-heading"><div><p className="eyebrow">Simulate</p><h1>See what happens under load</h1></div></div>
+        <p className="sidebar-copy">Shape a scenario here, then watch traffic move through your infrastructure.</p>
+        <span className={`pill ${check?.valid ? 'success' : 'danger'}`}>{check?.valid ? 'Ready to simulate' : 'Fix Deploy issues first'}</span>
+        <div className="scenario-card">
         <div className="scenario-controls">
           <label className="field-label">Select scenario
             <select value={scenarioId} onChange={(event) => setScenarioId(event.target.value)}>
@@ -1059,9 +1062,27 @@ function SimulateMode({
         </div>}
         {scenario && mode === 'rate' && <section className="scenario-subsection"><h3>Where requests come from</h3><div className="scenario-editor origin-editor">{Object.entries(E.POPS).map(([key, pop]) => <label className="field-label" key={key}>{pop.label} (%)<input type="number" min="0" max="100" value={scenario.origins?.[key] || 0} onChange={(event) => updateScenario(scenario.id, (item) => { item.origins = { ...(item.origins || {}), [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }; })} /></label>)}</div></section>}
         {conditions.length > 0 && <section className="scenario-subsection"><h3>Branch choices</h3><p className="helper-text">Override the chance that each condition is true for this scenario.</p>{conditions.map((condition) => <label className="odds-control" key={condition.key}><span>{condition.w}.{condition.h}: {condition.cond}</span><input type="range" min="0" max="100" step="1" value={Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { item.odds = { ...(item.odds || {}), [condition.key]: Number(event.target.value) / 100 }; })} /><strong>{Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)}%</strong><button className="text-button" type="button" onClick={() => updateScenario(scenario.id, (item) => { delete item.odds?.[condition.key]; })}>Reset</button></label>)}</section>}
-      </div>
-      {check?.valid && <SimulateCanvas build={build} analysis={analysis} deploy={deploy} result={result} playback={playback} trace={trace} />}
+          {mode === 'rate' && <button type="button" className="button quiet" disabled={!scenario || !check?.valid} onClick={startPlayback}>Play full scenario</button>}
+        </div>
+      </aside>
+      <div className="canvas-column sim-main">
+        {check?.valid ? <SimulateCanvas build={build} analysis={analysis} deploy={deploy} result={result} playback={playback} trace={trace} /> : <div className="simulation-empty"><span className="simulation-symbol">!</span><strong>Fix your Deploy first</strong><span>Open Deploy and apply the fixes it suggests, then come back to run a scenario.</span></div>}
       {comparison && <ComparisonPanel comparison={comparison} />}
+      {playback && frame && <section className="playback-panel">
+        <div className="card-heading"><div><p className="eyebrow">Scenario playback</p><h2>{Math.round(frame.t / 60)} min · {Math.round(frame.lam)} req/s</h2></div><button type="button" className="text-button" onClick={() => setPlayback(null)}>Close</button></div>
+        <div className="playback-controls"><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: !state.playing }))}>{playback.playing ? 'Pause' : 'Play'}</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.max(0, state.index - 1) }))}>Back</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.min(state.timeline.frames.length - 1, state.index + 1) }))}>Step</button><label>Speed<select value={playback.speed} onChange={(event) => setPlayback((state) => ({ ...state, speed: Number(event.target.value) }))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><span>p50 {Math.round(frame.p50)} ms · p99 {Math.round(frame.p99)} ms · {(frame.err * 100).toFixed(2)}% errors</span></div>
+        <input aria-label="Playback position" className="playback-seek" type="range" min="0" max={playback.timeline.frames.length - 1} value={playback.index} onChange={(event) => setPlayback((state) => ({ ...state, playing: false, index: Number(event.target.value) }))} />
+        <div className="playback-resources">{Object.entries(frame.res).map(([key, resource]) => <div key={key}><span>{resource.label}</span><strong>{Math.round(resource.rho * 100)}% busy</strong><small>{resource.inst ? `${resource.inst} instances` : resource.what || ''}</small><i><b style={{ width: `${Math.min(100, resource.rho * 100)}%` }} /></i></div>)}</div>
+        <div className="playback-events">{playback.timeline.events.filter((event) => event.i <= playback.index).slice(-5).map((event, index) => <p key={`${event.i}-${index}`}>{event.msg}</p>)}</div>
+      </section>}
+      {trace && traceStep && <section className="playback-panel trace-panel">
+        <div className="card-heading"><div><p className="eyebrow">Single-request trace</p><h2>{trace.label}</h2></div><button type="button" className="text-button" onClick={() => setTrace(null)}>Close</button></div>
+        <div className="playback-controls"><button className="button quiet" disabled={trace.index <= 0} onClick={() => setTrace((state) => ({ ...state, index: state.index - 1 }))}>Back</button><button className="button quiet" disabled={trace.index >= trace.steps.length - 1} onClick={() => setTrace((state) => ({ ...state, index: state.index + 1 }))}>Step</button><span>Step {trace.index + 1} of {trace.steps.length} · {Math.round(traceStep.start + traceStep.dur)} ms of {Math.round(trace.steps.at(-1)?.start + trace.steps.at(-1)?.dur || 0)} ms</span></div>
+        <div className="trace-step"><strong>{traceStep.label}</strong><p>{traceStep.why || traceStep.kind}</p><small>{Math.round(traceStep.dur)} ms{traceStep.wait > 0.5 ? ` · ${Math.round(traceStep.wait)} ms waiting` : ''}{traceStep.rho != null ? ` · ${Math.round(traceStep.rho * 100)}% busy` : ''}</small></div>
+        <ol className="trace-steps">{trace.steps.map((item, index) => <li className={index === trace.index ? 'current' : index < trace.index ? 'complete' : ''} key={`${item.label}-${index}`}><button type="button" onClick={() => setTrace((state) => ({ ...state, index }))}><span>{item.label}</span><strong>{index <= trace.index ? `${Math.round(item.dur)} ms` : '—'}</strong></button></li>)}</ol>
+      </section>}
+      </div>
+      <aside className="inspector sim-results" aria-label="Simulation results">
       {result ? (
         <div className="results">
           {result.mode === 'rate' ? (
@@ -1082,7 +1103,7 @@ function SimulateMode({
                 <p className="eyebrow">By request path</p>
                 {result.pathStats.map((item, index) => <div className="path-row" key={item.path.id}><div><strong>{item.path.label}</strong><small>{(item.share * 100).toFixed(1)}% of traffic</small></div><span>p99 {Math.round(item.p99)} ms</span><span>{(item.err * 100).toFixed(2)}% errors</span><button type="button" className="text-button" onClick={() => startTrace(index)}>Trace request</button></div>)}
               </section>
-              <section className="explanation-card"><div className="card-heading"><div><p className="eyebrow">Request timeline</p><h2>Playback and single-request trace</h2></div><button className="button quiet" type="button" disabled={!check?.valid} onClick={startPlayback}>Play full scenario</button></div><p>Use a trace above to step through the calls, compute, and data operations for one path, or play the traffic shape over time.</p></section>
+              <section className="explanation-card"><div className="card-heading"><div><p className="eyebrow">Request timeline</p><h2>Playback and single-request trace</h2></div></div><p>Use a trace above to step through the calls, compute, and data operations for one path, or play the traffic shape over time.</p></section>
               {result.stress && <section className="explanation-card"><p className="eyebrow">Maximum throughput</p><h2>{result.stress.slo ? `Within goal up to about ${Math.round(result.stress.slo)} requests/s` : `Misses the goal at light load`}</h2><p>{result.stress.first ? `${result.stress.first.label} fills first: ${result.stress.first.what}.` : `Scenario load: ${Math.round(E.scenarioRate(scenario))} requests/s.`}</p><div className="stress-points">{result.stress.pts.map((point) => <span key={point.lam}>{Math.round(point.lam)}/s · p99 {Math.round(point.p99)} ms · {(point.err * 100).toFixed(1)}% errors</span>)}</div></section>}
             </>
           ) : (
@@ -1099,19 +1120,7 @@ function SimulateMode({
       ) : (
         <div className="simulation-empty"><span className="simulation-symbol">◷</span><strong>Run a scenario to see the bottleneck</strong><span>Results are deterministic for the same design and seed, and every value is an approximate learning estimate.</span></div>
       )}
-      {playback && frame && <section className="playback-panel">
-        <div className="card-heading"><div><p className="eyebrow">Scenario playback</p><h2>{Math.round(frame.t / 60)} min · {Math.round(frame.lam)} req/s</h2></div><button type="button" className="text-button" onClick={() => setPlayback(null)}>Close</button></div>
-        <div className="playback-controls"><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: !state.playing }))}>{playback.playing ? 'Pause' : 'Play'}</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.max(0, state.index - 1) }))}>Back</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.min(state.timeline.frames.length - 1, state.index + 1) }))}>Step</button><label>Speed<select value={playback.speed} onChange={(event) => setPlayback((state) => ({ ...state, speed: Number(event.target.value) }))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><span>p50 {Math.round(frame.p50)} ms · p99 {Math.round(frame.p99)} ms · {(frame.err * 100).toFixed(2)}% errors</span></div>
-        <input aria-label="Playback position" className="playback-seek" type="range" min="0" max={playback.timeline.frames.length - 1} value={playback.index} onChange={(event) => setPlayback((state) => ({ ...state, playing: false, index: Number(event.target.value) }))} />
-        <div className="playback-resources">{Object.entries(frame.res).map(([key, resource]) => <div key={key}><span>{resource.label}</span><strong>{Math.round(resource.rho * 100)}% busy</strong><small>{resource.inst ? `${resource.inst} instances` : resource.what || ''}</small><i><b style={{ width: `${Math.min(100, resource.rho * 100)}%` }} /></i></div>)}</div>
-        <div className="playback-events">{playback.timeline.events.filter((event) => event.i <= playback.index).slice(-5).map((event, index) => <p key={`${event.i}-${index}`}>{event.msg}</p>)}</div>
-      </section>}
-      {trace && traceStep && <section className="playback-panel trace-panel">
-        <div className="card-heading"><div><p className="eyebrow">Single-request trace</p><h2>{trace.label}</h2></div><button type="button" className="text-button" onClick={() => setTrace(null)}>Close</button></div>
-        <div className="playback-controls"><button className="button quiet" disabled={trace.index <= 0} onClick={() => setTrace((state) => ({ ...state, index: state.index - 1 }))}>Back</button><button className="button quiet" disabled={trace.index >= trace.steps.length - 1} onClick={() => setTrace((state) => ({ ...state, index: state.index + 1 }))}>Step</button><span>Step {trace.index + 1} of {trace.steps.length} · {Math.round(traceStep.start + traceStep.dur)} ms of {Math.round(trace.steps.at(-1)?.start + trace.steps.at(-1)?.dur || 0)} ms</span></div>
-        <div className="trace-step"><strong>{traceStep.label}</strong><p>{traceStep.why || traceStep.kind}</p><small>{Math.round(traceStep.dur)} ms{traceStep.wait > 0.5 ? ` · ${Math.round(traceStep.wait)} ms waiting` : ''}{traceStep.rho != null ? ` · ${Math.round(traceStep.rho * 100)}% busy` : ''}</small></div>
-        <ol className="trace-steps">{trace.steps.map((item, index) => <li className={index === trace.index ? 'current' : index < trace.index ? 'complete' : ''} key={`${item.label}-${index}`}><button type="button" onClick={() => setTrace((state) => ({ ...state, index }))}><span>{item.label}</span><strong>{index <= trace.index ? `${Math.round(item.dur)} ms` : '—'}</strong></button></li>)}</ol>
-      </section>}
+      </aside>
     </section>
   );
 }

@@ -474,3 +474,32 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .sim-why { padding: 9px 15px; border-top: 1px solid var(--line); font-size: 12px; }
 @media (max-width: 760px) { .infra-canvas { height: 420px; } .infra-legend { padding: 6px 10px; } }
 @media (prefers-reduced-motion: reduce) { .edge-particle { display: none; } }
+
+/* Inspector header actions */
+.inspector-header > div:last-child { display: flex; flex: none; align-items: center; gap: 12px; }
+
+/* Simulate workspace: scenario controls left, canvas centre, results right */
+.sim-workspace { flex: none; grid-template-columns: 300px minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr); height: calc(100vh - 116px); min-height: 560px; }
+.sim-main { overflow-y: auto; }
+.sim-main .sim-canvas-panel { border: 0; border-radius: 0; }
+.sim-main .playback-panel, .sim-main .explanation-card { margin: 12px 15px; }
+.sim-sidebar .pill { margin: 0 0 12px; }
+.sim-sidebar .scenario-card { display: flex; flex-direction: column; gap: 10px; border: 0; padding: 0; background: transparent; }
+.sim-sidebar .scenario-controls { flex-direction: column; align-items: stretch; gap: 10px; }
+.sim-sidebar .scenario-controls .field-label { width: 100%; flex: none; }
+.sim-sidebar .scenario-actions { flex-wrap: wrap; }
+.sim-sidebar .scenario-controls > .button, .sim-sidebar > .scenario-card > .button { width: 100%; }
+.sim-sidebar .scenario-editor { grid-template-columns: 1fr 1fr; margin-top: 4px; }
+.sim-sidebar .scenario-editor .field-label:first-child { grid-column: 1 / -1; }
+.sim-sidebar .origin-editor { grid-template-columns: 1fr 1fr; }
+.sim-sidebar .odds-control { grid-template-columns: 1fr auto; }
+.sim-sidebar .odds-control > span { grid-column: 1 / -1; font-size: 11px; }
+.sim-sidebar .odds-control input[type="range"] { grid-column: 1; }
+.sim-results .results { margin-top: 0; }
+.sim-results .metric-grid { grid-template-columns: 1fr 1fr; }
+.sim-results .path-row { flex-wrap: wrap; }
+.sim-results .simulation-empty, .sim-main .simulation-empty { margin: 20px 15px; }
+@media (max-width: 1180px) { .sim-workspace { grid-template-columns: 270px minmax(0, 1fr); } .sim-workspace .sim-results { grid-column: 1 / -1; max-height: none; } }
+@media (max-width: 760px) { .sim-workspace { height: auto; grid-template-columns: 1fr; grid-template-rows: none; } .sim-sidebar { max-height: none; display: block; } .sim-main { overflow: visible; } }
+.sim-main > * { flex: none; }
+.sim-main .sim-canvas-panel .infra-canvas { height: clamp(380px, 58vh, 640px); }
