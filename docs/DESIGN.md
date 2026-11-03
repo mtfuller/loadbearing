@@ -116,7 +116,7 @@ Challenges are data, not code: a challenge is a starting Build and Deploy, a sce
 
 | ID | Requirement | Priority | POC |
 | --- | --- | --- | --- |
-| D1 | Many workloads per compute, many data nodes per store; drag chips between boxes; unfit drops refused, "works but not ideal" drops warned | P0 | Yes |
+| D1 | Many workloads per compute, many data nodes per store; drag Build workloads and data from the tray (or chips between boxes) onto the canvas; unfit drops refused, "works but not ideal" drops warned | P0 | Yes |
 | D2 | Regions as large boxes with tiers: entry, private network (compute, private stores, NAT, endpoints), managed services, outside services | P0 | Yes |
 | D3 | Network products per region (load balancer, API gateway with a limit, NAT, private endpoints), DNS steering, region links | P0 | Yes |
 | D4 | Reachability and network checks with one-click fixes | P0 | Yes |
@@ -218,6 +218,7 @@ Data kinds: `table`, `document`, `kv`, `queue`, `stream`, `topic`, `file`, `blob
 ```json
 {
   "kind": "loadbearing-deploy", "v": 1, "id": "dp-global", "name": "Global services",
+  "layout": { "r:us-east-1": { "x": 0, "y": 0 }, "c:c1@us-east-1": { "x": 300, "y": 60 } }, // optional canvas positions; nodes are relative to their region. Missing keys use the automatic layout
   "provider": "generic",                 // v1: "aws" | "gcp" | "generic"
   "catalog": "aws@2026-10-29",            // v1: catalog version used
   "regions": ["use1", "euw1", "apse1"],
@@ -377,7 +378,9 @@ The proof of concept is one HTML file of plain JavaScript with no framework and 
 
 **Events.** Elements declare intent with `data-act` (click), `data-ch` (change) and `data-in` (input); three document-level listeners dispatch to the `ACT`, `CH` and `IN` tables. This survives full re-renders without rebinding. `data-fb` marks regions for the comment mode.
 
-**The infra board.** Region boxes and their tiers are laid out by CSS flexbox. After layout, `wireBoard` measures every `[data-box]` and draws wires into an SVG layer underneath and labels into one above; hover or selection re-wires with focus. Box keys: `c:<computeId>@<region>`, `s:<storeId>@<region>`, `e:<region>` (entry), `n:<region>` (NAT), `x:<workload>` (outside), `u:<pop>` (users). Placement uses HTML5 drag-and-drop (`data-drag`, `data-drop`) with a fit check on `dragover`.
+**The React infrastructure canvas.** `src/infra-canvas.jsx` renders `deployGraph` (`poc/src/infra.js`) with React Flow: regions are container nodes, infrastructure are child nodes, wires come from the Build's calls and data operations. Deploy (`src/deploy-mode.jsx`) edits it through `commit()`: palette items and Build tray items are dragged onto regions or nodes, with fit checks on hover, and the inspector keeps every setting. Simulate (`src/simulate-canvas.jsx`) shows the same graph read-only with `trafficFor` (wire thickness and particles), `heatFor`/`heatLevel` (utilization with text) and the current trace step highlighted. Optional `layout` positions are the only layout state stored in the Deploy.
+
+**The legacy infra board.** Region boxes and their tiers are laid out by CSS flexbox. After layout, `wireBoard` measures every `[data-box]` and draws wires into an SVG layer underneath and labels into one above; hover or selection re-wires with focus. Box keys: `c:<computeId>@<region>`, `s:<storeId>@<region>`, `e:<region>` (entry), `n:<region>` (NAT), `x:<workload>` (outside), `u:<pop>` (users). Placement uses HTML5 drag-and-drop (`data-drag`, `data-drop`) with a fit check on `dragover`.
 
 **Animation.** Build stepping moves a dot along a curve between node rectangles. Simulate playback spawns particles per link at a rate proportional to log(flow), moving along hidden SVG paths with `getPointAtLength`, capped at 220. Heat, instance counts and the event feed update in place each frame.
 

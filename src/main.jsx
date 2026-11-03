@@ -14,6 +14,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
+import { DeployMode } from './deploy-mode.jsx';
+import { SimulateCanvas } from './simulate-canvas.jsx';
 
 const E = window.Loadbearing;
 const SYSTEM_EXAMPLES = E.exampleSystems();
@@ -460,7 +462,7 @@ function App() {
           rewindBuildStep={rewindBuildStep}
         />
       )}
-      {mode === 'deploy' && <DeployMode build={docs.build} deploy={deploy} check={deployCheck} updateDeploy={updateDeploy} />}
+      {mode === 'deploy' && <DeployMode build={docs.build} analysis={analysis} deploy={deploy} check={deployCheck} updateDeploy={updateDeploy} />}
       {mode === 'simulate' && (
         <SimulateMode
           build={docs.build}
@@ -987,132 +989,6 @@ function ExamplesDialog({ examples, onClose, onOpen }) {
   );
 }
 
-function DeployMode({ build, deploy, check, updateDeploy }) {
-  const assignedWorkloads = Object.fromEntries(deploy.compute.flatMap((item) => item.workloads.map((name) => [name, item.id])));
-  const assignedData = Object.fromEntries(deploy.stores.flatMap((item) => item.data.map((name) => [name, item.id])));
-  const moveWorkload = (workload, computeId) => updateDeploy((doc) => {
-    doc.compute.forEach((item) => { item.workloads = item.workloads.filter((name) => name !== workload); });
-    if (computeId) doc.compute.find((item) => item.id === computeId)?.workloads.push(workload);
-  });
-  const moveData = (data, storeId) => updateDeploy((doc) => {
-    doc.stores.forEach((item) => { item.data = item.data.filter((name) => name !== data); });
-    if (storeId) doc.stores.find((item) => item.id === storeId)?.data.push(data);
-  });
-  const addCompute = (event) => {
-    const type = event.target.value;
-    if (!type) return;
-    updateDeploy((doc) => { doc.compute.push(E.newCompute(doc, type)); });
-    event.target.value = '';
-  };
-  const addStore = (event) => {
-    const type = event.target.value;
-    if (!type) return;
-    updateDeploy((doc) => { doc.stores.push(E.newStore(doc, type)); });
-    event.target.value = '';
-  };
-
-  const updateResource = (key, id, prop, value) => updateDeploy((doc) => {
-    const item = doc[key].find((candidate) => candidate.id === id);
-    if (item) item[prop] = value;
-  });
-  const toggleRegions = (key, id, region) => updateDeploy((doc) => {
-    const item = doc[key].find((candidate) => candidate.id === id);
-    if (!item) return;
-    item.regions = item.regions.includes(region) ? item.regions.filter((value) => value !== region) : [...item.regions, region];
-    if (key === 'stores' && !item.regions.includes(item.primary)) item.primary = item.regions[0];
-  });
-  const regionChoices = (selected, onToggle, options = Object.keys(E.REGIONS)) => (
-    <div className="region-options">{options.map((region) => <label key={region}><input type="checkbox" checked={selected.includes(region)} onChange={() => onToggle(region)} />{E.REGIONS[region].code}</label>)}</div>
-  );
-  const autoPlace = () => updateDeploy((doc) => {
-    E.autoPlace(build, E.analyzeBuild(build), doc);
-  });
-  const applyProblemFix = (problem) => {
-    if (!problem.fix?.apply) return;
-    updateDeploy((doc) => problem.fix.apply(doc));
-  };
-  const updateComputeType = (compute, type) => updateDeploy((doc) => {
-    const item = doc.compute.find((candidate) => candidate.id === compute.id);
-    item.type = type;
-    Object.entries(E.COMPUTE[type].def).forEach(([key, value]) => {
-      if (item[key] == null || (key === 'size' && E.COMPUTE[type].sizes && !E.COMPUTE[type].sizes[item.size])) item[key] = value;
-    });
-  });
-  const updateStoreType = (store, type) => updateDeploy((doc) => {
-    const item = doc.stores.find((candidate) => candidate.id === store.id);
-    item.type = type;
-    const catalog = E.STORES[type];
-    if (!catalog.repl.includes(item.repl)) item.repl = catalog.repl[0];
-    if (catalog.usd && !catalog.usd[item.size]) item.size = 'Medium';
-  });
-
-  return (
-    <section className="mode-page deploy-page">
-      <div className="page-heading"><div><p className="eyebrow">Deploy</p><h1>Map logic to infrastructure</h1><p>Choose where workloads run, where data lives, and how regions connect.</p></div><span className={`pill ${check?.valid ? 'success' : 'danger'}`}>{check?.valid ? 'Deployment works' : `${check?.errors || 0} issues`}</span></div>
-      <section className="deploy-card deploy-global">
-        <div className="card-heading"><div><h2>{deploy.name}</h2><p>Global placement, networking, and region settings</p></div><button className="button quiet" type="button" onClick={autoPlace}>Auto-place everything</button></div>
-        <label className="field-label">Deploy name<input value={deploy.name} onChange={(event) => updateDeploy((doc) => { doc.name = event.target.value || 'Untitled deploy'; })} /></label>
-        <h3>Regions</h3>
-        {regionChoices(deploy.regions, (region) => updateDeploy((doc) => { doc.regions = doc.regions.includes(region) ? doc.regions.filter((value) => value !== region) : [...doc.regions, region]; E.normalizeDeploy(doc); }))}
-        <div className="deploy-global-grid">
-          <label className="field-label">User routing
-            <select value={deploy.network.steering} onChange={(event) => updateDeploy((doc) => { doc.network.steering = event.target.value; })}>
-              {Object.entries(E.NET.steering).map(([key, option]) => <option key={key} value={key}>{option.label}</option>)}
-            </select>
-          </label>
-          <label className="toggle-field"><input type="checkbox" checked={deploy.peering} onChange={(event) => updateDeploy((doc) => { doc.peering = event.target.checked; })} />Connect private networks across regions</label>
-          {deploy.peering && <label className="field-label">Inter-region link
-            <select value={deploy.network.link} onChange={(event) => updateDeploy((doc) => { doc.network.link = event.target.value; })}>
-              {Object.entries(E.NET.link).map(([key, option]) => <option key={key} value={key}>{option.label}</option>)}
-            </select>
-          </label>}
-        </div>
-        <div className="region-network-list">{deploy.regions.map((region) => <div className="region-network" key={region}>
-          <strong>{E.REGIONS[region]?.code || region}</strong>
-          <label>Public entry<select value={deploy.network.regions[region]?.entry || 'lb'} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].entry = event.target.value; })}>{Object.entries(E.NET.entry).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-          <label>Request limit/s<input type="number" min="1" value={deploy.network.regions[region]?.limit || 10000} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].limit = Math.max(1, Number(event.target.value) || 1); })} /></label>
-          <label className="toggle-field"><input type="checkbox" checked={!!deploy.network.regions[region]?.nat} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].nat = event.target.checked; })} />NAT for outbound traffic</label>
-          <label className="toggle-field"><input type="checkbox" checked={!!deploy.network.regions[region]?.endpoints} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].endpoints = event.target.checked; })} />Private service endpoints</label>
-        </div>)}</div>
-      </section>
-      <div className="deploy-grid">
-        <section className="deploy-card">
-          <div className="card-heading"><div><h2>Compute</h2><p>Configure size, capacity, network, and workload placement</p></div><select aria-label="Add compute" className="compact-select" defaultValue="" onChange={addCompute}><option value="">+ Add compute</option>{Object.entries(E.COMPUTE).map(([type, value]) => <option key={type} value={type}>{value.label}</option>)}</select></div>
-          {deploy.compute.map((compute) => <article className="resource-editor" key={compute.id}>
-            <div className="resource-editor-heading"><strong>{compute.name}</strong><button className="text-button" type="button" onClick={() => updateDeploy((doc) => { doc.compute = doc.compute.filter((item) => item.id !== compute.id); })}>Delete</button></div>
-            <label className="field-label">Name<input value={compute.name} onChange={(event) => updateResource('compute', compute.id, 'name', event.target.value || 'compute')} /></label>
-            <label className="field-label">Compute type<select value={compute.type} onChange={(event) => updateComputeType(compute, event.target.value)}>{Object.entries(E.COMPUTE).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-            {E.COMPUTE[compute.type].sizes && <label className="field-label">Size<select value={compute.size} onChange={(event) => updateResource('compute', compute.id, 'size', event.target.value)}>{Object.keys(E.COMPUTE[compute.type].sizes).map((size) => <option key={size}>{size}</option>)}</select></label>}
-            {compute.type !== 'fn' && <div className="deploy-global-grid"><label className="field-label">Minimum instances<input type="number" min="0" value={compute.min ?? 0} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.min = Math.max(0, Number(event.target.value) || 0); if (item.max < item.min) item.max = item.min; })} /></label><label className="field-label">Maximum instances<input type="number" min="1" value={compute.max ?? 1} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.max = Math.max(item.min || 0, Number(event.target.value) || 1); })} /></label></div>}
-            {compute.type === 'fn' && <label className="field-label">Concurrency<input type="number" min="1" value={compute.concurrency || 1000} onChange={(event) => updateResource('compute', compute.id, 'concurrency', Math.max(1, Number(event.target.value) || 1))} /></label>}
-            {compute.type === 'fn' && <label className="field-label">Memory (MB)<input type="number" min="128" step="128" value={compute.memory || 1024} onChange={(event) => updateResource('compute', compute.id, 'memory', Math.max(128, Number(event.target.value) || 128))} /></label>}
-            <label className="toggle-field"><input type="checkbox" checked={!!compute.vpc} onChange={(event) => updateResource('compute', compute.id, 'vpc', event.target.checked)} />Private network access</label>
-            <div><span className="field-label">Regions</span>{regionChoices(compute.regions, (region) => toggleRegions('compute', compute.id, region), deploy.regions)}</div>
-            <div><span className="field-label">Workloads</span>{build.workloads.map((workload) => <label className="toggle-field" key={workload.id}><input type="checkbox" aria-label={`Run ${workload.name} on ${compute.name}`} checked={compute.workloads.includes(workload.name)} onChange={(event) => moveWorkload(workload.name, event.target.checked ? compute.id : '')} />{workload.name}</label>)}</div>
-          </article>)}
-        </section>
-        <section className="deploy-card">
-          <div className="card-heading"><div><h2>Data stores</h2><p>Configure product, copies, partitioning, and placement</p></div><select aria-label="Add store" className="compact-select" defaultValue="" onChange={addStore}><option value="">+ Add store</option>{Object.entries(E.STORES).map(([type, value]) => <option key={type} value={type}>{value.label}</option>)}</select></div>
-          {deploy.stores.map((store) => <article className="resource-editor" key={store.id}>
-            <div className="resource-editor-heading"><strong>{store.name}</strong><button className="text-button" type="button" onClick={() => updateDeploy((doc) => { doc.stores = doc.stores.filter((item) => item.id !== store.id); })}>Delete</button></div>
-            <label className="field-label">Name<input value={store.name} onChange={(event) => updateResource('stores', store.id, 'name', event.target.value || 'store')} /></label>
-            <label className="field-label">Store type<select value={store.type} onChange={(event) => updateStoreType(store, event.target.value)}>{Object.entries(E.STORES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-            {E.STORES[store.type].usd && <label className="field-label">Size<select value={store.size || 'Medium'} onChange={(event) => updateResource('stores', store.id, 'size', event.target.value)}>{Object.keys(E.STORES[store.type].usd).map((size) => <option key={size}>{size}</option>)}</select></label>}
-            <label className="field-label">Copies across regions<select value={store.repl} onChange={(event) => updateResource('stores', store.id, 'repl', event.target.value)}>{E.STORES[store.type].repl.map((value) => <option key={value} value={value}>{E.REPL[value].label}</option>)}</select></label>
-            <label className="field-label">Read from<select value={store.readFrom || 'nearest'} onChange={(event) => updateResource('stores', store.id, 'readFrom', event.target.value)}><option value="nearest">Nearest copy</option><option value="primary">Primary only</option></select></label>
-            <div><span className="field-label">Regions</span>{regionChoices(store.regions, (region) => toggleRegions('stores', store.id, region), deploy.regions)}</div>
-            {store.repl !== 'single' && store.repl !== 'multi-primary' && <label className="field-label">Primary region<select value={store.primary} onChange={(event) => updateResource('stores', store.id, 'primary', event.target.value)}>{store.regions.map((region) => <option key={region} value={region}>{E.REGIONS[region]?.code || region}</option>)}</select></label>}
-            {E.STORES[store.type].shards && <label className="field-label">Shards<input type="number" min="1" max="64" value={store.shards || 1} onChange={(event) => updateResource('stores', store.id, 'shards', Math.max(1, Math.min(64, Number(event.target.value) || 1)))} /></label>}
-            {E.STORES[store.type].partitions && <label className="field-label">Partitions<input type="number" min="1" value={store.partitions || 12} onChange={(event) => updateResource('stores', store.id, 'partitions', Math.max(1, Number(event.target.value) || 1))} /></label>}
-            <div><span className="field-label">Data</span>{build.data.map((data) => <React.Fragment key={data.id}><label className="toggle-field"><input type="checkbox" aria-label={`Store ${data.name} in ${store.name}`} checked={store.data.includes(data.name)} disabled={E.storeFit(store.type, data.kind).fit === 'no' && !store.data.includes(data.name)} onChange={(event) => moveData(data.name, event.target.checked ? store.id : '')} />{data.name} <small>{shortType(data.kind)}</small></label>{store.data.includes(data.name) && (E.STORES[store.type].shards || E.STORES[store.type].autoShard) && data.fields?.length > 0 && <label className="field-label">Partition {data.name} by<select value={store.dataCfg?.[data.name]?.pk || data.partitionKey || data.fields.find((field) => field.key)?.name || data.fields[0].name} onChange={(event) => updateDeploy((doc) => { const item = doc.stores.find((entry) => entry.id === store.id); item.dataCfg = item.dataCfg || {}; item.dataCfg[data.name] = { pk: event.target.value }; })}>{data.fields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}</select></label>}</React.Fragment>)}</div>
-          </article>)}
-        </section>
-      </div>
-      {build.workloads.filter((item) => item.external).map((workload) => <section className="deploy-card external-region" key={workload.id}><strong>{workload.name}</strong><label className="field-label">External service region<select value={deploy.externals?.[workload.name]?.region || deploy.regions[0]} onChange={(event) => updateDeploy((doc) => { doc.externals = doc.externals || {}; doc.externals[workload.name] = { region: event.target.value }; })}>{Object.keys(E.REGIONS).map((region) => <option key={region} value={region}>{E.REGIONS[region].code}</option>)}</select></label></section>)}
-      <section className="deploy-card"><div className="card-heading"><div><h2>Deployment checks</h2><p>Issues below can block simulation; fixes update the configuration.</p></div></div>{(check?.problems || []).map((problem, index) => <div className={`deploy-problem ${problem.sev}`} key={`${problem.msg}-${index}`}><span>{problem.msg}</span>{problem.fix?.apply && <button className="button quiet" type="button" onClick={() => applyProblemFix(problem)}>{problem.fix.label}</button>}</div>)}{!check?.problems?.length && <p className="muted">No deployment problems found.</p>}</section>
-    </section>
-  );
-}
 
 function SimulateMode({
   build, analysis, deploy, check, scenarioId, setScenarioId, result, runScenario,
@@ -1184,6 +1060,7 @@ function SimulateMode({
         {scenario && mode === 'rate' && <section className="scenario-subsection"><h3>Where requests come from</h3><div className="scenario-editor origin-editor">{Object.entries(E.POPS).map(([key, pop]) => <label className="field-label" key={key}>{pop.label} (%)<input type="number" min="0" max="100" value={scenario.origins?.[key] || 0} onChange={(event) => updateScenario(scenario.id, (item) => { item.origins = { ...(item.origins || {}), [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }; })} /></label>)}</div></section>}
         {conditions.length > 0 && <section className="scenario-subsection"><h3>Branch choices</h3><p className="helper-text">Override the chance that each condition is true for this scenario.</p>{conditions.map((condition) => <label className="odds-control" key={condition.key}><span>{condition.w}.{condition.h}: {condition.cond}</span><input type="range" min="0" max="100" step="1" value={Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { item.odds = { ...(item.odds || {}), [condition.key]: Number(event.target.value) / 100 }; })} /><strong>{Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)}%</strong><button className="text-button" type="button" onClick={() => updateScenario(scenario.id, (item) => { delete item.odds?.[condition.key]; })}>Reset</button></label>)}</section>}
       </div>
+      {check?.valid && <SimulateCanvas build={build} analysis={analysis} deploy={deploy} result={result} playback={playback} trace={trace} />}
       {comparison && <ComparisonPanel comparison={comparison} />}
       {result ? (
         <div className="results">

@@ -34,7 +34,8 @@ The React app loads the pure engine modules from `poc/src/` through `scripts/cop
 | Products, regions, network rules, Deploy validation | `poc/src/infra.js` (v1 moves products to `catalog/*.json`) |
 | Latency, capacity, queueing, playback, stress, batch | `poc/src/sim.js` |
 | Example Build and Deploys | `poc/src/starter.js` (regenerate `examples/` after) |
-| React UI and canvas | `src/main.jsx` |
+| React UI and Build canvas | `src/main.jsx` |
+| Deploy editor, shared infrastructure canvas, Simulate traffic view | `src/deploy-mode.jsx`, `src/infra-canvas.jsx`, `src/simulate-canvas.jsx` (graph, placement and traffic helpers live in `poc/src/infra.js`) |
 | React UI styles | `src/styles.css` |
 | Original Build, Deploy, and Simulate UI | `poc/src/ui-*.js` (parity reference) |
 

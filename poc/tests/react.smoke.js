@@ -36,21 +36,41 @@ async function main() {
     await page.getByRole('button', { name: 'Deploy' }).click();
 
     await page.getByRole('heading', { name: 'Map logic to infrastructure' }).waitFor();
-    await page.getByLabel('Store New table in main-db').check();
-    await page.getByLabel('Add compute').selectOption('fn');
-    await page.getByLabel('Run New workload on functions').check();
+    const canvas = page.getByTestId('infra-canvas');
+    await canvas.locator('[data-node-key^="c:"]').first().waitFor();
+    if (!(await canvas.locator('.region-box').count())) throw new Error('Deploy canvas should show regions.');
+    // drag a Build data node onto a store, then refuse an invalid drop
+    await page.locator('[data-tray="data:New table"]').dragTo(canvas.locator('[data-kind="store"]', { hasText: 'main-db' }));
+    await page.getByRole('status').filter({ hasText: 'New table is stored in main-db' }).waitFor();
+    await page.locator('[data-tray="data:New table"]').dragTo(canvas.locator('[data-kind="store"]', { hasText: 'events' }));
+    await page.getByRole('status').filter({ hasText: /can.t hold New table/ }).waitFor();
+    // add compute from the palette, then drag a workload onto it
+    const computeBefore = await canvas.locator('[data-kind="compute"]').count();
+    await page.locator('[data-palette="compute:fn"]').dragTo(canvas.locator('.region-box').first(), { targetPosition: { x: 40, y: 400 } });
+    await page.waitForFunction((count) => document.querySelectorAll('[data-testid="infra-canvas"] [data-kind="compute"]').length === count + 1, computeBefore);
+    const fnNode = canvas.locator('[data-kind="compute"]').filter({ hasText: 'Functions' }).last();
+    await page.locator('[data-tray="workload:New workload"]').dragTo(fnNode);
+    await fnNode.locator('.chip', { hasText: 'New workload' }).waitFor();
+    // the inspector still exposes every setting
+    await fnNode.click();
+    await page.getByLabel('Compute type').waitFor();
+    await page.getByLabel(/^Run New workload on /).isChecked();
     await page.getByRole('button', { name: 'Simulate' }).click();
     await page.getByRole('heading', { name: 'See what happens under load' }).waitFor();
     await page.getByRole('button', { name: 'Run simulation' }).click();
     await page.getByText('p99 latency').waitFor();
+    const simCanvas = page.getByTestId('infra-canvas');
+    await simCanvas.locator('.heat-readout strong', { hasText: '%' }).first().waitFor();
     await page.getByRole('button', { name: 'Find max throughput' }).click();
     await page.getByText('Maximum throughput').waitFor();
     await page.getByRole('button', { name: 'Play full scenario' }).click();
     await page.getByText('Scenario playback').waitFor();
+    await simCanvas.locator('.edge-live').first().waitFor({ state: 'attached' });
     await page.getByLabel('Playback position').waitFor();
     await page.locator('.playback-panel').getByRole('button', { name: 'Close' }).click();
     await page.getByRole('button', { name: 'Trace request' }).first().click();
     await page.getByText('Single-request trace', { exact: true }).waitFor();
+    await simCanvas.locator('.infra-node.trace-active').first().waitFor();
     await page.locator('.trace-panel').getByRole('button', { name: 'Step' }).click();
     await page.locator('.trace-panel').getByRole('button', { name: 'Close' }).click();
 

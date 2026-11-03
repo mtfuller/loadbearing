@@ -912,6 +912,7 @@ function normalizeDeploy(Dp) {
   N.link = N.link || 'peering'; N.steering = N.steering || 'nearest'; N.regions = N.regions || {};
   Dp.regions.forEach(r => { N.regions[r] = Object.assign({ entry: 'lb', limit: 10000, nat: true, endpoints: false }, N.regions[r] || {}); });
   Dp.stores.forEach(s => { if (s.shards == null) s.shards = 1; s.dataCfg = s.dataCfg || {}; });
+  Dp.layout = Dp.layout || {}; // canvas positions only; never read by validation or simulation
   return Dp;
 }
 const PUBLIC_MANAGED = t => STORES[t].net === 'public';
@@ -1074,6 +1075,155 @@ function autoPlace(B, A, Dp) {
     if (!s) { s = newStore(Dp, defaultStoreFor(d.kind)); Dp.stores.push(s); }
     s.data.push(d.name);
   });
+}
+
+/* ---------- the infrastructure picture (shared by the Deploy and Simulate canvases) ---------- */
+// Node keys match the boxes the simulator reports: c:<compute>@<region>, s:<store>@<region>,
+// e:<region> (public entry), n:<region> (NAT), p:<region> (private endpoints), x:<external>, u:<pop> (users).
+const GRAPH = { nodeW: 232, chip: 24, head: 76, gap: 16, pad: 22, regionHead: 46, colEntry: 22, colCompute: 300, colStore: 610, outsideW: 210, regionGap: 70 }; // canvas geometry, in px
+function chipCount(n) { return Math.max(1, n); }
+function deployGraph(B, A, Dp, opts) {
+  opts = opts || {}; const layout = Dp.layout || {};
+  const compOf = {}, storeOf = {};
+  Dp.compute.forEach(c => c.workloads.forEach(w => { compOf[w] = compOf[w] || c; }));
+  Dp.stores.forEach(s => s.data.forEach(d => { storeOf[d] = storeOf[d] || s; }));
+  const nodes = [], byKey = {}, edges = [], edgeBy = {};
+  const addNode = (n) => { n.w = n.w || GRAPH.nodeW; byKey[n.key] = n; nodes.push(n); return n; };
+  const addEdge = (from, to, kind, label) => {
+    if (!byKey[from] || !byKey[to] || from === to) return;
+    const id = from + '|' + to; const e = edgeBy[id];
+    if (e) { if (label && !e.label.split(', ').includes(label)) e.label += ', ' + label; return; }
+    edgeBy[id] = { id, from, to, kind, label: label || '' }; edges.push(edgeBy[id]);
+  };
+  const regionLabel = r => REGIONS[r] ? REGIONS[r].code : r;
+  Dp.regions.forEach(r => {
+    if (!REGIONS[r]) return; const NR = netRegion(Dp, r);
+    addNode({ key: 'e:' + r, kind: 'entry', region: r, name: NR.entry === 'none' ? 'No public entry' : NET.entry[NR.entry].label, entry: NR.entry, h: 70, col: 'entry' });
+    if (NR.nat) addNode({ key: 'n:' + r, kind: 'nat', region: r, name: 'NAT gateway', h: 70, col: 'entry' });
+    if (NR.endpoints) addNode({ key: 'p:' + r, kind: 'endpoints', region: r, name: 'Private endpoints', h: 70, col: 'entry' });
+    Dp.compute.filter(c => c.regions.includes(r)).forEach(c => addNode({ key: 'c:' + c.id + '@' + r, kind: 'compute', region: r, id: c.id, name: c.name, type: c.type, h: GRAPH.head + GRAPH.chip * chipCount(c.workloads.length), col: 'compute' }));
+    Dp.stores.filter(s => s.regions.includes(r)).forEach(s => addNode({ key: 's:' + s.id + '@' + r, kind: 'store', region: r, id: s.id, name: s.name, type: s.type, primary: s.primary === r, h: GRAPH.head + GRAPH.chip * chipCount(s.data.length), col: 'store' }));
+  });
+  B.workloads.filter(w => w.external).forEach(w => {
+    const r = (Dp.externals && Dp.externals[w.name] && Dp.externals[w.name].region) || Dp.regions[0];
+    addNode({ key: 'x:' + w.name, kind: 'external', region: Dp.regions.includes(r) ? r : 'outside', id: w.name, name: w.name, h: 70, col: 'store' });
+  });
+  (opts.origins || []).forEach(o => { if (o.pop && !byKey['u:' + o.pop]) addNode({ key: 'u:' + o.pop, kind: 'user', region: 'outside', name: POPS[o.pop] ? POPS[o.pop].label : o.pop, h: 62, col: 'entry' }); });
+  // static wires: what the Build's code asks for, given where it was placed
+  const entryComputes = {};
+  A.entries.filter(e => e.type === 'request').forEach(e => {
+    const C = compOf[e.w]; if (!C) return;
+    C.regions.forEach(r => {
+      const k = 'c:' + C.id + '@' + r; if (!byKey[k]) return;
+      (entryComputes[r] = entryComputes[r] || []).includes(k) || entryComputes[r].push(k);
+      if (netRegion(Dp, r).entry !== 'none' && (COMPUTE[C.type].net === 'vpc' || netRegion(Dp, r).entry === 'apigw')) addEdge('e:' + r, k, 'entry', 'requests');
+    });
+  });
+  A.calls.forEach(c => {
+    const C1 = compOf[c.from]; if (!C1) return;
+    const ext = B.workloads.find(w => w.name === c.to && w.external);
+    C1.regions.forEach(r => {
+      if (ext) return addEdge('c:' + C1.id + '@' + r, 'x:' + c.to, 'call', 'calls');
+      const C2 = compOf[c.to]; if (!C2 || C2 === C1) return;
+      const r2 = C2.regions.includes(r) ? r : nearestRegion(C2.regions, r);
+      addEdge('c:' + C1.id + '@' + r, 'c:' + C2.id + '@' + r2, 'call', 'calls');
+    });
+  });
+  A.dataOps.forEach(o => {
+    const C = compOf[o.w], S = storeOf[o.d]; if (!C || !S) return;
+    const d = A.D[o.d]; const msg = d && ['queue', 'stream', 'topic'].includes(d.kind);
+    C.regions.forEach(r => o.ops.forEach(op => {
+      const t = storeTarget(S, op === 'read' ? 'read' : 'insert', r); if (!t) return;
+      const kind = op === 'publish' || (msg && op === 'insert') ? 'pub' : op === 'read' ? 'read' : 'write';
+      addEdge('c:' + C.id + '@' + r, 's:' + S.id + '@' + t, kind, kind === 'pub' ? 'publishes' : kind === 'read' ? 'reads' : 'writes');
+    }));
+  });
+  A.triggers.forEach(t => {
+    const C = compOf[t.w], S = storeOf[t.d]; if (!C || !S) return;
+    const sr = S.regions.includes(S.primary) ? S.primary : S.regions[0];
+    addEdge('s:' + S.id + '@' + sr, 'c:' + C.id + '@' + (C.regions.includes(sr) ? sr : nearestRegion(C.regions, sr)), 'deliver', 'delivers');
+  });
+  Dp.stores.forEach(s => { if (s.regions.length > 1) { const lead = s.regions.includes(s.primary) ? s.primary : s.regions[0]; s.regions.filter(r => r !== lead).forEach(r => addEdge('s:' + s.id + '@' + lead, 's:' + s.id + '@' + r, 'replicate', 'copies')); } });
+  (opts.origins || []).forEach(o => {
+    if (!o.region || !o.pop) return;
+    if (o.entry && o.entry !== 'none') addEdge('u:' + o.pop, 'e:' + o.region, 'user', 'requests');
+    else (entryComputes[o.region] || []).forEach(k => addEdge('u:' + o.pop, k, 'user', 'requests'));
+  });
+  Object.keys(opts.links || {}).forEach(k => { const p = k.split('|'); addEdge(p[0], p[1], p[2] === 'deliver' ? 'deliver' : p[2], p[2]); });
+  // layout: three columns per region (entry and network, compute, data), regions two to a row
+  const regionBox = {}; const rIds = Dp.regions.filter(r => REGIONS[r]);
+  const place = (list, region) => {
+    const cols = { entry: GRAPH.colEntry, compute: GRAPH.colCompute, store: GRAPH.colStore }; const y = { entry: GRAPH.regionHead, compute: GRAPH.regionHead, store: GRAPH.regionHead };
+    let w = 0, h = 0;
+    list.forEach(n => {
+      const o = layout[n.key]; const col = region === 'outside' ? 'entry' : n.col; const auto = { x: region === 'outside' ? 20 : cols[col], y: y[col] };
+      n.x = o ? o.x : auto.x; n.y = o ? o.y : auto.y; y[col] += n.h + GRAPH.gap;
+      w = Math.max(w, n.x + n.w + GRAPH.pad); h = Math.max(h, n.y + n.h + GRAPH.pad);
+    });
+    return { w: Math.max(w, 300), h: Math.max(h, 160) };
+  };
+  const outsideNodes = nodes.filter(n => n.region === 'outside');
+  const outside = outsideNodes.length ? place(outsideNodes, 'outside') : null;
+  let ox = outside ? GRAPH.outsideW + GRAPH.regionGap : 0, rowY = 0, rowH = 0;
+  const regions = rIds.map((r, i) => {
+    const mine = nodes.filter(n => n.region === r); const size = place(mine, r);
+    if (i % 2 === 0 && i > 0) { rowY += rowH + GRAPH.regionGap; rowH = 0; ox = outside ? GRAPH.outsideW + GRAPH.regionGap : 0; }
+    const auto = { x: ox, y: rowY }; const o = layout['r:' + r]; const pos = o || auto;
+    ox += size.w + GRAPH.regionGap; rowH = Math.max(rowH, size.h);
+    regionBox[r] = Object.assign({ id: r, key: 'r:' + r, code: regionLabel(r), city: REGIONS[r].city }, pos, size);
+    return regionBox[r];
+  });
+  const outsideBox = outside ? { id: 'outside', key: 'r:outside', code: 'Outside', city: 'Users and services', x: 0, y: 0, w: GRAPH.outsideW, h: Math.max(outside.h, 160), outside: true } : null;
+  return { regions, outside: outsideBox, nodes, edges, entryComputes, byKey };
+}
+// Requests per second on each wire, from a finished run or one playback frame ({ links, origins, lam | lambda }).
+function trafficFor(graph, snap) {
+  const out = {}; const add = (id, v) => { if (graph.edges.some(e => e.id === id)) out[id] = (out[id] || 0) + v; };
+  Object.keys(snap.links || {}).forEach(k => { const p = k.split('|'); add(p[0] + '|' + p[1], snap.links[k]); });
+  const lam = snap.lambda != null ? snap.lambda : (snap.lam || 0);
+  (snap.origins || []).forEach(o => {
+    if (!o.region || !o.pop) return; const rate = lam * o.share;
+    if (o.entry && o.entry !== 'none') { add('u:' + o.pop + '|e:' + o.region, rate); const cs = graph.entryComputes[o.region] || []; cs.forEach(k => add('e:' + o.region + '|' + k, rate / cs.length)); }
+    else { const cs = graph.entryComputes[o.region] || []; cs.forEach(k => add('u:' + o.pop + '|' + k, rate / cs.length)); }
+  });
+  return out;
+}
+// The resource state (utilization, what limits it) behind a canvas node, if the run measured one.
+function heatFor(nodeKey, states) {
+  if (!states) return null;
+  const k = nodeKey[0] === 'e' && nodeKey[1] === ':' ? 'g:' + nodeKey.slice(2) : nodeKey;
+  return states[k] || null;
+}
+function heatLevel(rho) { return rho >= 1 ? 'over' : rho >= 0.8 ? 'high' : rho >= 0.5 ? 'medium' : 'low'; }
+// Editing helpers used by the Deploy canvas. Each mutates a Deploy copy and reports what happened.
+function placeWorkloadOn(Dp, workload, computeId) {
+  Dp.compute.forEach(c => { c.workloads = c.workloads.filter(w => w !== workload); });
+  const C = Dp.compute.find(c => c.id === computeId); if (C) C.workloads.push(workload); return !!C;
+}
+function placeDataIn(Dp, B, dataName, storeId) {
+  const S = Dp.stores.find(s => s.id === storeId); const d = B.data.find(x => x.name === dataName);
+  if (!S || !d) return { ok: false, fit: 'no' };
+  const F = storeFit(S.type, d.kind); if (F.fit === 'no') return { ok: false, fit: 'no' };
+  Dp.stores.forEach(s => { s.data = s.data.filter(x => x !== dataName); }); S.data.push(dataName);
+  return { ok: true, fit: F.fit, note: F.note };
+}
+function moveToRegion(Dp, key, id, from, to) {
+  const item = Dp[key].find(x => x.id === id); if (!item || from === to || !Dp.regions.includes(to)) return false;
+  item.regions = item.regions.filter(r => r !== from && r !== to).concat(to);
+  if (key === 'stores') { if (item.repl === 'single') item.regions = [to]; if (item.primary === from || !item.regions.includes(item.primary)) item.primary = item.regions[0]; }
+  return true;
+}
+function addInRegion(Dp, key, type, region) {
+  const item = key === 'compute' ? newCompute(Dp, type) : newStore(Dp, type);
+  item.regions = [region];
+  if (key === 'stores') { item.primary = region; if (item.repl !== 'single' && STORES[type].repl.includes('single')) item.repl = 'single'; }
+  Dp[key].push(item); return item;
+}
+function removeRegion(Dp, region) {
+  Dp.regions = Dp.regions.filter(r => r !== region);
+  Dp.compute.forEach(c => { c.regions = c.regions.filter(r => r !== region); });
+  Dp.stores.forEach(s => { s.regions = s.regions.filter(r => r !== region); if (!s.regions.includes(s.primary)) s.primary = s.regions[0] || Dp.regions[0]; });
+  if (Dp.layout) Object.keys(Dp.layout).forEach(k => { if (k.endsWith('@' + region) || k === 'r:' + region || k === 'e:' + region || k === 'n:' + region || k === 'p:' + region) delete Dp.layout[k]; });
 }
 /* ===================== Simulation engine =====================
    Approximate model. Constants are assumptions listed in the app. */
