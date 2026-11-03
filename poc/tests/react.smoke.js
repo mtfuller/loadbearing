@@ -58,9 +58,12 @@ async function main() {
     // world map view of the same deployment: regions at their locations, add a region from the map
     await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'World map' }).click();
     const worldMap = page.getByTestId('world-map');
+    await worldMap.locator('.map-pin-region i').first().click();
     await worldMap.locator('.map-region').first().waitFor();
     await worldMap.getByRole('button', { name: 'Add region eu-west-1' }).click();
-    await worldMap.locator('.map-region[data-region="euw1"]').waitFor();
+    await worldMap.locator('.map-pin-region[data-region="euw1"]').waitFor({ state: 'attached' });
+    await worldMap.getByRole('button', { name: 'Zoom in' }).click();
+    await worldMap.getByRole('button', { name: 'Fit map' }).click();
     await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'Diagram' }).click();
     await page.getByTestId('infra-canvas').locator('[data-region="euw1"]').first().waitFor();
     await page.getByRole('button', { name: 'Simulate' }).click();
@@ -88,11 +91,20 @@ async function main() {
     await page.getByLabel('Latency goal (ms)').first().waitFor();
     await page.locator('.sim-sidebar').getByText('Requests', { exact: true }).locator('input').fill('900000000');
     await page.waitForFunction((before) => document.querySelector('.metric-grid strong')?.textContent !== before, p50Before);
+    // live edits must not re-fit or zoom the canvas
+    const viewportBefore = await page.locator('.react-flow__viewport').first().getAttribute('style');
+    await page.locator('.sim-sidebar').getByText('Requests', { exact: true }).locator('input').fill('800000000');
+    await page.waitForTimeout(900);
+    const viewportAfter = await page.locator('.react-flow__viewport').first().getAttribute('style');
+    if (viewportBefore !== viewportAfter) throw new Error('The canvas viewport moved after a live edit.');
     await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'World map' }).click();
+    await page.getByTestId('world-map').locator('.map-pin-region i').first().click();
     await page.getByTestId('world-map').locator('.map-region').first().waitFor();
     await page.getByRole('button', { name: /^Take .* offline$/ }).first().click();
     await page.getByText(/stops working/).first().waitFor();
     await page.getByRole('button', { name: /^Bring .* back online$/ }).first().click();
+    const pin = page.getByTestId('world-map').locator('.map-pin-region i').first();
+    if (!(await page.getByTestId('world-map').locator('.map-row .map-heat').count())) await pin.click();
     await page.getByTestId('world-map').locator('.map-row .map-heat').first().waitFor();
     await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'Diagram' }).click();
 

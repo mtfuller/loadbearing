@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BaseEdge,
@@ -8,6 +8,8 @@ import {
   MarkerType,
   Position,
   ReactFlow,
+  useNodesInitialized,
+  useStore,
   applyNodeChanges,
   getSmoothStepPath,
   useReactFlow
@@ -93,7 +95,8 @@ function InfraNode({ data, selected }) {
       onDragLeave={droppable ? () => setOver(null) : undefined}
       onDrop={droppable ? (event) => { event.preventDefault(); event.stopPropagation(); const payload = dragState.current; setOver(null); endDrag(); if (payload) ctx.onDropOnNode?.(gnode, payload); } : undefined}
     >
-      <Handle type="target" position={Position.Left} isConnectable={ctx.editable} />
+      <Handle id="tl" type="target" position={Position.Left} isConnectable={ctx.editable} />
+      <Handle id="tr" type="target" position={Position.Right} isConnectable={false} className="handle-quiet" />
       <div className="infra-node-title">
         <span className="node-icon" aria-hidden="true">{KIND_ICON[gnode.kind]}</span>
         <strong>{gnode.name}</strong>
@@ -123,7 +126,8 @@ function InfraNode({ data, selected }) {
         {state.inst != null && state.type === 'compute' && <small>{state.inst} {state.inst === 1 ? 'instance' : 'instances'}{state.lag ? ` · ${state.lag} still starting` : ''}</small>}
       </div>}
       {rate > 0 && !state && <div className="heat-readout"><small>{E.fmtN(rate)} requests/s pass through</small></div>}
-      <Handle type="source" position={Position.Right} isConnectable={ctx.editable} />
+      <Handle id="sr" type="source" position={Position.Right} isConnectable={ctx.editable} />
+      <Handle id="sl" type="source" position={Position.Left} isConnectable={false} className="handle-quiet" />
     </div>
   );
 }
@@ -195,7 +199,7 @@ export function InfraCanvas({
 }) {
   const { screenToFlowPosition, fitView } = useReactFlow();
   const [nodes, setNodes] = useState([]);
-  const structure = `${graph.regions.map((region) => region.id).join()}|${graph.nodes.map((node) => node.key).join()}`;
+  const structure = `${graph.regions.map((region) => region.id).join()}|${graph.nodes.filter((node) => node.kind !== 'user').map((node) => node.key).join()}`;
 
   const baseNodes = useMemo(() => {
     const regionNodes = [...(graph.outside ? [graph.outside] : []), ...graph.regions].map((region) => ({
@@ -209,19 +213,38 @@ export function InfraCanvas({
     return [...regionNodes, ...infraNodes];
   }, [graph, editable]);
   useEffect(() => setNodes(baseNodes), [baseNodes]);
-  useEffect(() => { const timer = window.setTimeout(() => fitView({ padding: 0.08, duration: 200 }), 60); return () => window.clearTimeout(timer); }, [structure, fitView]);
+  // Fit once when the canvas opens, and again when the set of nodes changes only if the learner has not moved the view.
+  const moved = useRef(false);
+  const ready = useNodesInitialized();
+  const paneWidth = useStore((state) => Math.round(state.width / 40));
+  useEffect(() => {
+    if (moved.current || !ready) return undefined;
+    const timer = window.setTimeout(() => fitView({ padding: 0.08 }), 80);
+    return () => window.clearTimeout(timer);
+  }, [structure, paneWidth, ready, fitView]);
 
   const activeNodes = useMemo(() => new Set(trace?.nodes || []), [trace]);
-  const edges = useMemo(() => graph.edges.map((edge) => {
-    const touchesSelection = selectedKey && (edge.from === selectedKey || edge.to === selectedKey);
-    const active = !!trace?.edges?.has(edge.id);
-    const rate = traffic?.[edge.id] || 0;
-    return {
-      id: edge.id, source: edge.from, target: edge.to, type: 'traffic', zIndex: active ? 5 : 1,
-      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-      data: { kind: edge.kind, rate, active, dim: !!trace && !active, motion, speed, showLabel: touchesSelection || active || (editable && graph.edges.length < 9) }
-    };
-  }), [graph.edges, selectedKey, trace, traffic, motion, speed, editable]);
+  // Wires leave on the side that faces their target, so back-references and same-column links stay short instead of looping round.
+  const edges = useMemo(() => {
+    const absolute = (key) => { const node = graph.byKey[key]; const region = graph.regions.find((item) => item.id === node.region) || graph.outside; return { x: (region?.x || 0) + node.x + node.w / 2, w: node.w }; };
+    const ranked = [...graph.edges].sort((a, b) => (traffic?.[b.id] || 0) - (traffic?.[a.id] || 0));
+    const labelled = new Set(ranked.slice(0, 7).filter((edge) => (traffic?.[edge.id] || 0) > 0).map((edge) => edge.id));
+    return graph.edges.map((edge) => {
+      const touchesSelection = selectedKey && (edge.from === selectedKey || edge.to === selectedKey);
+      const active = !!trace?.edges?.has(edge.id);
+      const rate = traffic?.[edge.id] || 0;
+      const from = absolute(edge.from), to = absolute(edge.to);
+      const forward = to.x > from.x + from.w / 2;
+      const backward = to.x < from.x - from.w / 2;
+      const handles = forward ? { sourceHandle: 'sr', targetHandle: 'tl' } : backward ? { sourceHandle: 'sl', targetHandle: 'tr' } : { sourceHandle: 'sr', targetHandle: 'tr' };
+      const color = active || rate > 0 ? 'var(--edge-live)' : 'var(--edge)';
+      return {
+        id: edge.id, source: edge.from, target: edge.to, type: 'traffic', zIndex: active ? 5 : 1, ...handles,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 9, height: 9, markerUnits: 'userSpaceOnUse', color },
+        data: { kind: edge.kind, rate, active, dim: !!trace && !active, motion, speed, showLabel: touchesSelection || active || labelled.has(edge.id) || (editable && graph.edges.length < 9) }
+      };
+    });
+  }, [graph, selectedKey, trace, traffic, motion, speed, editable]);
 
   const nodeRates = useMemo(() => {
     const totals = {};
@@ -253,6 +276,7 @@ export function InfraCanvas({
           edgeTypes={edgeTypes}
           onNodesChange={(changes) => setNodes((items) => applyNodeChanges(changes, items))}
           onNodeDragStop={handleDragStop}
+          onMoveStart={(event) => { if (event && event.isTrusted) moved.current = true; }}
           onNodeClick={(_event, node) => node.type === 'infra' && onSelect?.(node.id)}
           onPaneClick={() => onSelect?.(null)}
           onConnect={(connection) => onConnect?.(connection.source, connection.target)}
@@ -272,7 +296,7 @@ export function InfraCanvas({
           proOptions={{ hideAttribution: true }}
         >
           <Background color="var(--grid)" gap={22} />
-          <Controls showInteractive={false} />
+          <Controls showInteractive={false} onFitView={() => { moved.current = false; }} />
         </ReactFlow>
       </InfraContext.Provider>
     </div>
