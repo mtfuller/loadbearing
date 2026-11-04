@@ -14,6 +14,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
+import { DeployMode } from './deploy-mode.jsx';
+import { SimulateCanvas } from './simulate-canvas.jsx';
 
 const E = window.Loadbearing;
 const SYSTEM_EXAMPLES = E.exampleSystems();
@@ -74,6 +76,21 @@ function App() {
     [docs.build, analysis, deploy]
   );
   const canSimulate = !!deployCheck?.valid;
+  const [offline, setOffline] = useState([]);
+  const downRegions = useMemo(() => offline.filter((id) => deploy.regions.includes(id)), [offline, deploy]);
+  const simDeploy = useMemo(() => {
+    if (!downRegions.length) return deploy;
+    const copy = duplicate(deploy);
+    downRegions.forEach((id) => E.removeRegion(copy, id));
+    E.normalizeDeploy(copy);
+    return copy;
+  }, [deploy, downRegions]);
+  const simCheck = useMemo(
+    () => !downRegions.length ? deployCheck : (analysis.valid && simDeploy.regions.length ? E.validateDeploy(docs.build, analysis, simDeploy) : null),
+    [downRegions, deployCheck, docs.build, analysis, simDeploy]
+  );
+  const simOk = !!simCheck?.valid;
+  const toggleOffline = (id) => { setOffline((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); setPlayback(null); setTrace(null); setResult(null); setComparison(null); };
   const activeExample = SYSTEM_EXAMPLES.find((item) => item.build.id === docs.build.id);
 
   useEffect(() => {
@@ -200,8 +217,8 @@ function App() {
 
   const runScenario = (stress = false) => {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
-    if (!scenario || !canSimulate) return;
-    setResult(evaluateScenario(scenario, deploy, stress));
+    if (!scenario || !simOk) return;
+    setResult(evaluateScenario(scenario, simDeploy, stress));
     setComparison(null);
   };
 
@@ -244,16 +261,16 @@ function App() {
 
   const startPlayback = () => {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
-    if (!scenario || !canSimulate || E.scenarioMode(analysis, scenario) !== 'rate') return;
-    const model = E.compileModel(docs.build, analysis, deploy, deployCheck);
+    if (!scenario || !simOk || E.scenarioMode(analysis, scenario) !== 'rate') return;
+    const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
     setPlayback({ timeline: E.simulateTimeline(model, scenario, { frames: 48, N: 200 }), index: 0, speed: 1, playing: true });
     setTrace(null);
   };
 
   const startTrace = (pathIndex) => {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
-    if (!scenario || !canSimulate) return;
-    const model = E.compileModel(docs.build, analysis, deploy, deployCheck);
+    if (!scenario || !simOk) return;
+    const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
     const paths = E.enumeratePaths(analysis, scenario.entry, scenario.odds || {}, {
       fileRows: E.entryInfo(analysis, scenario.entry)?.type === 'file' ? scenario.rows || 1 : 1
     });
@@ -268,6 +285,17 @@ function App() {
     setTrace({ label: path.label, steps, index: 0 });
     setPlayback(null);
   };
+
+  // Live playground: any change to the scenario or deployment recomputes a quick result without pressing Run.
+  const liveScenario = docs.build.scenarios.find((item) => item.id === scenarioId);
+  useEffect(() => {
+    if (mode !== 'simulate' || !liveScenario || !simOk || E.scenarioMode(analysis, liveScenario) !== 'rate') return undefined;
+    const timer = window.setTimeout(() => {
+      const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
+      setResult((current) => (current && !current.live ? current : { ...E.evaluateRate(model, liveScenario, { N: 400, seed: 11 }), live: true }));
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [mode, liveScenario, docs.build, analysis, simDeploy, simCheck, simOk]);
 
   const startBuildStep = (key) => {
     if (!analysis.valid) return;
@@ -460,13 +488,16 @@ function App() {
           rewindBuildStep={rewindBuildStep}
         />
       )}
-      {mode === 'deploy' && <DeployMode build={docs.build} deploy={deploy} check={deployCheck} updateDeploy={updateDeploy} />}
+      {mode === 'deploy' && <DeployMode build={docs.build} analysis={analysis} deploy={deploy} check={deployCheck} updateDeploy={updateDeploy} />}
       {mode === 'simulate' && (
         <SimulateMode
           build={docs.build}
           analysis={analysis}
-          deploy={deploy}
-          check={deployCheck}
+          deploy={simDeploy}
+          check={simCheck}
+          offline={downRegions}
+          toggleOffline={toggleOffline}
+          updateDeploy={updateDeploy}
           scenarioId={scenarioId}
           setScenarioId={selectScenario}
           result={result}
@@ -987,135 +1018,9 @@ function ExamplesDialog({ examples, onClose, onOpen }) {
   );
 }
 
-function DeployMode({ build, deploy, check, updateDeploy }) {
-  const assignedWorkloads = Object.fromEntries(deploy.compute.flatMap((item) => item.workloads.map((name) => [name, item.id])));
-  const assignedData = Object.fromEntries(deploy.stores.flatMap((item) => item.data.map((name) => [name, item.id])));
-  const moveWorkload = (workload, computeId) => updateDeploy((doc) => {
-    doc.compute.forEach((item) => { item.workloads = item.workloads.filter((name) => name !== workload); });
-    if (computeId) doc.compute.find((item) => item.id === computeId)?.workloads.push(workload);
-  });
-  const moveData = (data, storeId) => updateDeploy((doc) => {
-    doc.stores.forEach((item) => { item.data = item.data.filter((name) => name !== data); });
-    if (storeId) doc.stores.find((item) => item.id === storeId)?.data.push(data);
-  });
-  const addCompute = (event) => {
-    const type = event.target.value;
-    if (!type) return;
-    updateDeploy((doc) => { doc.compute.push(E.newCompute(doc, type)); });
-    event.target.value = '';
-  };
-  const addStore = (event) => {
-    const type = event.target.value;
-    if (!type) return;
-    updateDeploy((doc) => { doc.stores.push(E.newStore(doc, type)); });
-    event.target.value = '';
-  };
-
-  const updateResource = (key, id, prop, value) => updateDeploy((doc) => {
-    const item = doc[key].find((candidate) => candidate.id === id);
-    if (item) item[prop] = value;
-  });
-  const toggleRegions = (key, id, region) => updateDeploy((doc) => {
-    const item = doc[key].find((candidate) => candidate.id === id);
-    if (!item) return;
-    item.regions = item.regions.includes(region) ? item.regions.filter((value) => value !== region) : [...item.regions, region];
-    if (key === 'stores' && !item.regions.includes(item.primary)) item.primary = item.regions[0];
-  });
-  const regionChoices = (selected, onToggle, options = Object.keys(E.REGIONS)) => (
-    <div className="region-options">{options.map((region) => <label key={region}><input type="checkbox" checked={selected.includes(region)} onChange={() => onToggle(region)} />{E.REGIONS[region].code}</label>)}</div>
-  );
-  const autoPlace = () => updateDeploy((doc) => {
-    E.autoPlace(build, E.analyzeBuild(build), doc);
-  });
-  const applyProblemFix = (problem) => {
-    if (!problem.fix?.apply) return;
-    updateDeploy((doc) => problem.fix.apply(doc));
-  };
-  const updateComputeType = (compute, type) => updateDeploy((doc) => {
-    const item = doc.compute.find((candidate) => candidate.id === compute.id);
-    item.type = type;
-    Object.entries(E.COMPUTE[type].def).forEach(([key, value]) => {
-      if (item[key] == null || (key === 'size' && E.COMPUTE[type].sizes && !E.COMPUTE[type].sizes[item.size])) item[key] = value;
-    });
-  });
-  const updateStoreType = (store, type) => updateDeploy((doc) => {
-    const item = doc.stores.find((candidate) => candidate.id === store.id);
-    item.type = type;
-    const catalog = E.STORES[type];
-    if (!catalog.repl.includes(item.repl)) item.repl = catalog.repl[0];
-    if (catalog.usd && !catalog.usd[item.size]) item.size = 'Medium';
-  });
-
-  return (
-    <section className="mode-page deploy-page">
-      <div className="page-heading"><div><p className="eyebrow">Deploy</p><h1>Map logic to infrastructure</h1><p>Choose where workloads run, where data lives, and how regions connect.</p></div><span className={`pill ${check?.valid ? 'success' : 'danger'}`}>{check?.valid ? 'Deployment works' : `${check?.errors || 0} issues`}</span></div>
-      <section className="deploy-card deploy-global">
-        <div className="card-heading"><div><h2>{deploy.name}</h2><p>Global placement, networking, and region settings</p></div><button className="button quiet" type="button" onClick={autoPlace}>Auto-place everything</button></div>
-        <label className="field-label">Deploy name<input value={deploy.name} onChange={(event) => updateDeploy((doc) => { doc.name = event.target.value || 'Untitled deploy'; })} /></label>
-        <h3>Regions</h3>
-        {regionChoices(deploy.regions, (region) => updateDeploy((doc) => { doc.regions = doc.regions.includes(region) ? doc.regions.filter((value) => value !== region) : [...doc.regions, region]; E.normalizeDeploy(doc); }))}
-        <div className="deploy-global-grid">
-          <label className="field-label">User routing
-            <select value={deploy.network.steering} onChange={(event) => updateDeploy((doc) => { doc.network.steering = event.target.value; })}>
-              {Object.entries(E.NET.steering).map(([key, option]) => <option key={key} value={key}>{option.label}</option>)}
-            </select>
-          </label>
-          <label className="toggle-field"><input type="checkbox" checked={deploy.peering} onChange={(event) => updateDeploy((doc) => { doc.peering = event.target.checked; })} />Connect private networks across regions</label>
-          {deploy.peering && <label className="field-label">Inter-region link
-            <select value={deploy.network.link} onChange={(event) => updateDeploy((doc) => { doc.network.link = event.target.value; })}>
-              {Object.entries(E.NET.link).map(([key, option]) => <option key={key} value={key}>{option.label}</option>)}
-            </select>
-          </label>}
-        </div>
-        <div className="region-network-list">{deploy.regions.map((region) => <div className="region-network" key={region}>
-          <strong>{E.REGIONS[region]?.code || region}</strong>
-          <label>Public entry<select value={deploy.network.regions[region]?.entry || 'lb'} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].entry = event.target.value; })}>{Object.entries(E.NET.entry).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-          <label>Request limit/s<input type="number" min="1" value={deploy.network.regions[region]?.limit || 10000} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].limit = Math.max(1, Number(event.target.value) || 1); })} /></label>
-          <label className="toggle-field"><input type="checkbox" checked={!!deploy.network.regions[region]?.nat} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].nat = event.target.checked; })} />NAT for outbound traffic</label>
-          <label className="toggle-field"><input type="checkbox" checked={!!deploy.network.regions[region]?.endpoints} onChange={(event) => updateDeploy((doc) => { E.normalizeDeploy(doc); doc.network.regions[region].endpoints = event.target.checked; })} />Private service endpoints</label>
-        </div>)}</div>
-      </section>
-      <div className="deploy-grid">
-        <section className="deploy-card">
-          <div className="card-heading"><div><h2>Compute</h2><p>Configure size, capacity, network, and workload placement</p></div><select aria-label="Add compute" className="compact-select" defaultValue="" onChange={addCompute}><option value="">+ Add compute</option>{Object.entries(E.COMPUTE).map(([type, value]) => <option key={type} value={type}>{value.label}</option>)}</select></div>
-          {deploy.compute.map((compute) => <article className="resource-editor" key={compute.id}>
-            <div className="resource-editor-heading"><strong>{compute.name}</strong><button className="text-button" type="button" onClick={() => updateDeploy((doc) => { doc.compute = doc.compute.filter((item) => item.id !== compute.id); })}>Delete</button></div>
-            <label className="field-label">Name<input value={compute.name} onChange={(event) => updateResource('compute', compute.id, 'name', event.target.value || 'compute')} /></label>
-            <label className="field-label">Compute type<select value={compute.type} onChange={(event) => updateComputeType(compute, event.target.value)}>{Object.entries(E.COMPUTE).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-            {E.COMPUTE[compute.type].sizes && <label className="field-label">Size<select value={compute.size} onChange={(event) => updateResource('compute', compute.id, 'size', event.target.value)}>{Object.keys(E.COMPUTE[compute.type].sizes).map((size) => <option key={size}>{size}</option>)}</select></label>}
-            {compute.type !== 'fn' && <div className="deploy-global-grid"><label className="field-label">Minimum instances<input type="number" min="0" value={compute.min ?? 0} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.min = Math.max(0, Number(event.target.value) || 0); if (item.max < item.min) item.max = item.min; })} /></label><label className="field-label">Maximum instances<input type="number" min="1" value={compute.max ?? 1} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.max = Math.max(item.min || 0, Number(event.target.value) || 1); })} /></label></div>}
-            {compute.type === 'fn' && <label className="field-label">Concurrency<input type="number" min="1" value={compute.concurrency || 1000} onChange={(event) => updateResource('compute', compute.id, 'concurrency', Math.max(1, Number(event.target.value) || 1))} /></label>}
-            {compute.type === 'fn' && <label className="field-label">Memory (MB)<input type="number" min="128" step="128" value={compute.memory || 1024} onChange={(event) => updateResource('compute', compute.id, 'memory', Math.max(128, Number(event.target.value) || 128))} /></label>}
-            <label className="toggle-field"><input type="checkbox" checked={!!compute.vpc} onChange={(event) => updateResource('compute', compute.id, 'vpc', event.target.checked)} />Private network access</label>
-            <div><span className="field-label">Regions</span>{regionChoices(compute.regions, (region) => toggleRegions('compute', compute.id, region), deploy.regions)}</div>
-            <div><span className="field-label">Workloads</span>{build.workloads.map((workload) => <label className="toggle-field" key={workload.id}><input type="checkbox" aria-label={`Run ${workload.name} on ${compute.name}`} checked={compute.workloads.includes(workload.name)} onChange={(event) => moveWorkload(workload.name, event.target.checked ? compute.id : '')} />{workload.name}</label>)}</div>
-          </article>)}
-        </section>
-        <section className="deploy-card">
-          <div className="card-heading"><div><h2>Data stores</h2><p>Configure product, copies, partitioning, and placement</p></div><select aria-label="Add store" className="compact-select" defaultValue="" onChange={addStore}><option value="">+ Add store</option>{Object.entries(E.STORES).map(([type, value]) => <option key={type} value={type}>{value.label}</option>)}</select></div>
-          {deploy.stores.map((store) => <article className="resource-editor" key={store.id}>
-            <div className="resource-editor-heading"><strong>{store.name}</strong><button className="text-button" type="button" onClick={() => updateDeploy((doc) => { doc.stores = doc.stores.filter((item) => item.id !== store.id); })}>Delete</button></div>
-            <label className="field-label">Name<input value={store.name} onChange={(event) => updateResource('stores', store.id, 'name', event.target.value || 'store')} /></label>
-            <label className="field-label">Store type<select value={store.type} onChange={(event) => updateStoreType(store, event.target.value)}>{Object.entries(E.STORES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-            {E.STORES[store.type].usd && <label className="field-label">Size<select value={store.size || 'Medium'} onChange={(event) => updateResource('stores', store.id, 'size', event.target.value)}>{Object.keys(E.STORES[store.type].usd).map((size) => <option key={size}>{size}</option>)}</select></label>}
-            <label className="field-label">Copies across regions<select value={store.repl} onChange={(event) => updateResource('stores', store.id, 'repl', event.target.value)}>{E.STORES[store.type].repl.map((value) => <option key={value} value={value}>{E.REPL[value].label}</option>)}</select></label>
-            <label className="field-label">Read from<select value={store.readFrom || 'nearest'} onChange={(event) => updateResource('stores', store.id, 'readFrom', event.target.value)}><option value="nearest">Nearest copy</option><option value="primary">Primary only</option></select></label>
-            <div><span className="field-label">Regions</span>{regionChoices(store.regions, (region) => toggleRegions('stores', store.id, region), deploy.regions)}</div>
-            {store.repl !== 'single' && store.repl !== 'multi-primary' && <label className="field-label">Primary region<select value={store.primary} onChange={(event) => updateResource('stores', store.id, 'primary', event.target.value)}>{store.regions.map((region) => <option key={region} value={region}>{E.REGIONS[region]?.code || region}</option>)}</select></label>}
-            {E.STORES[store.type].shards && <label className="field-label">Shards<input type="number" min="1" max="64" value={store.shards || 1} onChange={(event) => updateResource('stores', store.id, 'shards', Math.max(1, Math.min(64, Number(event.target.value) || 1)))} /></label>}
-            {E.STORES[store.type].partitions && <label className="field-label">Partitions<input type="number" min="1" value={store.partitions || 12} onChange={(event) => updateResource('stores', store.id, 'partitions', Math.max(1, Number(event.target.value) || 1))} /></label>}
-            <div><span className="field-label">Data</span>{build.data.map((data) => <React.Fragment key={data.id}><label className="toggle-field"><input type="checkbox" aria-label={`Store ${data.name} in ${store.name}`} checked={store.data.includes(data.name)} disabled={E.storeFit(store.type, data.kind).fit === 'no' && !store.data.includes(data.name)} onChange={(event) => moveData(data.name, event.target.checked ? store.id : '')} />{data.name} <small>{shortType(data.kind)}</small></label>{store.data.includes(data.name) && (E.STORES[store.type].shards || E.STORES[store.type].autoShard) && data.fields?.length > 0 && <label className="field-label">Partition {data.name} by<select value={store.dataCfg?.[data.name]?.pk || data.partitionKey || data.fields.find((field) => field.key)?.name || data.fields[0].name} onChange={(event) => updateDeploy((doc) => { const item = doc.stores.find((entry) => entry.id === store.id); item.dataCfg = item.dataCfg || {}; item.dataCfg[data.name] = { pk: event.target.value }; })}>{data.fields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}</select></label>}</React.Fragment>)}</div>
-          </article>)}
-        </section>
-      </div>
-      {build.workloads.filter((item) => item.external).map((workload) => <section className="deploy-card external-region" key={workload.id}><strong>{workload.name}</strong><label className="field-label">External service region<select value={deploy.externals?.[workload.name]?.region || deploy.regions[0]} onChange={(event) => updateDeploy((doc) => { doc.externals = doc.externals || {}; doc.externals[workload.name] = { region: event.target.value }; })}>{Object.keys(E.REGIONS).map((region) => <option key={region} value={region}>{E.REGIONS[region].code}</option>)}</select></label></section>)}
-      <section className="deploy-card"><div className="card-heading"><div><h2>Deployment checks</h2><p>Issues below can block simulation; fixes update the configuration.</p></div></div>{(check?.problems || []).map((problem, index) => <div className={`deploy-problem ${problem.sev}`} key={`${problem.msg}-${index}`}><span>{problem.msg}</span>{problem.fix?.apply && <button className="button quiet" type="button" onClick={() => applyProblemFix(problem)}>{problem.fix.label}</button>}</div>)}{!check?.problems?.length && <p className="muted">No deployment problems found.</p>}</section>
-    </section>
-  );
-}
 
 function SimulateMode({
-  build, analysis, deploy, check, scenarioId, setScenarioId, result, runScenario,
+  build, analysis, deploy, check, offline = [], toggleOffline, updateDeploy, scenarioId, setScenarioId, result, runScenario,
   activeExample, comparison, compareDeploys,
   updateScenario, startNewScenario, duplicateScenario, deleteScenario, startPlayback,
   playback, setPlayback, trace, setTrace, startTrace
@@ -1153,9 +1058,12 @@ function SimulateMode({
   const frame = playback?.timeline.frames[playback.index];
   const traceStep = trace?.steps[trace.index];
   return (
-    <section className="mode-page simulate-page">
-      <div className="page-heading"><div><p className="eyebrow">Simulate</p><h1>See what happens under load</h1><p>Shape a workload scenario, model its bottlenecks, then inspect playback or one request.</p></div><span className={`pill ${check?.valid ? 'success' : 'danger'}`}>{check?.valid ? 'Ready to simulate' : 'Fix Deploy issues first'}</span></div>
-      <div className="scenario-card">
+    <section className="workspace sim-workspace">
+      <aside className="sidebar sim-sidebar">
+        <div className="sidebar-heading"><div><p className="eyebrow">Simulate</p><h1>See what happens under load</h1></div></div>
+        <p className="sidebar-copy">Shape a scenario here, then watch traffic move through your infrastructure.</p>
+        <span className={`pill ${check?.valid ? 'success' : 'danger'}`}>{check?.valid ? 'Ready to simulate' : 'Fix Deploy issues first'}</span>
+        <div className="scenario-card">
         <div className="scenario-controls">
           <label className="field-label">Select scenario
             <select value={scenarioId} onChange={(event) => setScenarioId(event.target.value)}>
@@ -1183,8 +1091,46 @@ function SimulateMode({
         </div>}
         {scenario && mode === 'rate' && <section className="scenario-subsection"><h3>Where requests come from</h3><div className="scenario-editor origin-editor">{Object.entries(E.POPS).map(([key, pop]) => <label className="field-label" key={key}>{pop.label} (%)<input type="number" min="0" max="100" value={scenario.origins?.[key] || 0} onChange={(event) => updateScenario(scenario.id, (item) => { item.origins = { ...(item.origins || {}), [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }; })} /></label>)}</div></section>}
         {conditions.length > 0 && <section className="scenario-subsection"><h3>Branch choices</h3><p className="helper-text">Override the chance that each condition is true for this scenario.</p>{conditions.map((condition) => <label className="odds-control" key={condition.key}><span>{condition.w}.{condition.h}: {condition.cond}</span><input type="range" min="0" max="100" step="1" value={Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { item.odds = { ...(item.odds || {}), [condition.key]: Number(event.target.value) / 100 }; })} /><strong>{Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)}%</strong><button className="text-button" type="button" onClick={() => updateScenario(scenario.id, (item) => { delete item.odds?.[condition.key]; })}>Reset</button></label>)}</section>}
-      </div>
+        <section className="scenario-subsection live-tweaks" aria-label="Playground controls">
+          <h3>Playground</h3>
+          <p className="helper-text">Change anything here and the picture updates right away. Regions can go offline to see what survives.</p>
+          <div className="region-toggles">{[...deploy.regions, ...offline].map((id) => {
+            const down = offline.includes(id);
+            return <button type="button" key={id} className={`region-toggle ${down ? '' : 'on'}`} aria-pressed={!down} aria-label={down ? `Bring ${E.REGIONS[id].code} back online` : `Take ${E.REGIONS[id].code} offline`} onClick={() => toggleOffline(id)}>{down ? '✕ ' : '✓ '}{E.REGIONS[id].code}{down ? ' offline' : ''}</button>;
+          })}</div>
+          {offline.length > 0 && !check?.valid && <p className="helper-text">With {offline.map((id) => E.REGIONS[id].code).join(', ')} offline this design stops working{check?.problems?.find((item) => item.sev === 'error') ? `: ${check.problems.find((item) => item.sev === 'error').msg}` : '.'}</p>}
+          {deploy.compute.filter((item) => item.type !== 'fn').map((item) => (
+            <div className="tweak-row" key={item.id}><span>{item.name}</span>
+              <label>Max instances<input type="number" min="1" aria-label={`Max instances for ${item.name}`} value={item.max ?? 1} onChange={(event) => updateDeploy((doc) => { const found = doc.compute.find((entry) => entry.id === item.id); if (found) { found.max = Math.max(1, Number(event.target.value) || 1); if ((found.min ?? 0) > found.max) found.min = found.max; } })} /></label>
+            </div>
+          ))}
+          {deploy.stores.filter((item) => E.STORES[item.type].shards).map((item) => (
+            <div className="tweak-row" key={item.id}><span>{item.name}</span>
+              <label>Shards<input type="number" min="1" max="64" aria-label={`Shards for ${item.name}`} value={item.shards || 1} onChange={(event) => updateDeploy((doc) => { const found = doc.stores.find((entry) => entry.id === item.id); if (found) found.shards = Math.max(1, Math.min(64, Number(event.target.value) || 1)); })} /></label>
+            </div>
+          ))}
+        </section>
+          {mode === 'rate' && <button type="button" className="button quiet" disabled={!scenario || !check?.valid} onClick={startPlayback}>Play full scenario</button>}
+        </div>
+      </aside>
+      <div className="canvas-column sim-main">
+        {check?.valid ? <SimulateCanvas build={build} analysis={analysis} deploy={deploy} result={result} playback={playback} trace={trace} offline={offline} onToggleOffline={toggleOffline} /> : <div className="simulation-empty"><span className="simulation-symbol">!</span><strong>Fix your Deploy first</strong><span>Open Deploy and apply the fixes it suggests, then come back to run a scenario.</span></div>}
       {comparison && <ComparisonPanel comparison={comparison} />}
+      {playback && frame && <section className="playback-panel">
+        <div className="card-heading"><div><p className="eyebrow">Scenario playback</p><h2>{Math.round(frame.t / 60)} min · {Math.round(frame.lam)} req/s</h2></div><button type="button" className="text-button" onClick={() => setPlayback(null)}>Close</button></div>
+        <div className="playback-controls"><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: !state.playing }))}>{playback.playing ? 'Pause' : 'Play'}</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.max(0, state.index - 1) }))}>Back</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.min(state.timeline.frames.length - 1, state.index + 1) }))}>Step</button><label>Speed<select value={playback.speed} onChange={(event) => setPlayback((state) => ({ ...state, speed: Number(event.target.value) }))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><span>p50 {Math.round(frame.p50)} ms · p99 {Math.round(frame.p99)} ms · {(frame.err * 100).toFixed(2)}% errors</span></div>
+        <input aria-label="Playback position" className="playback-seek" type="range" min="0" max={playback.timeline.frames.length - 1} value={playback.index} onChange={(event) => setPlayback((state) => ({ ...state, playing: false, index: Number(event.target.value) }))} />
+        <div className="playback-resources">{Object.entries(frame.res).map(([key, resource]) => <div key={key}><span>{resource.label}</span><strong>{Math.round(resource.rho * 100)}% busy</strong><small>{resource.inst ? `${resource.inst} instances` : resource.what || ''}</small><i><b style={{ width: `${Math.min(100, resource.rho * 100)}%` }} /></i></div>)}</div>
+        <div className="playback-events">{playback.timeline.events.filter((event) => event.i <= playback.index).slice(-5).map((event, index) => <p key={`${event.i}-${index}`}>{event.msg}</p>)}</div>
+      </section>}
+      {trace && traceStep && <section className="playback-panel trace-panel">
+        <div className="card-heading"><div><p className="eyebrow">Single-request trace</p><h2>{trace.label}</h2></div><button type="button" className="text-button" onClick={() => setTrace(null)}>Close</button></div>
+        <div className="playback-controls"><button className="button quiet" disabled={trace.index <= 0} onClick={() => setTrace((state) => ({ ...state, index: state.index - 1 }))}>Back</button><button className="button quiet" disabled={trace.index >= trace.steps.length - 1} onClick={() => setTrace((state) => ({ ...state, index: state.index + 1 }))}>Step</button><span>Step {trace.index + 1} of {trace.steps.length} · {Math.round(traceStep.start + traceStep.dur)} ms of {Math.round(trace.steps.at(-1)?.start + trace.steps.at(-1)?.dur || 0)} ms</span></div>
+        <div className="trace-step"><strong>{traceStep.label}</strong><p>{traceStep.why || traceStep.kind}</p><small>{Math.round(traceStep.dur)} ms{traceStep.wait > 0.5 ? ` · ${Math.round(traceStep.wait)} ms waiting` : ''}{traceStep.rho != null ? ` · ${Math.round(traceStep.rho * 100)}% busy` : ''}</small></div>
+        <ol className="trace-steps">{trace.steps.map((item, index) => <li className={index === trace.index ? 'current' : index < trace.index ? 'complete' : ''} key={`${item.label}-${index}`}><button type="button" onClick={() => setTrace((state) => ({ ...state, index }))}><span>{item.label}</span><strong>{index <= trace.index ? `${Math.round(item.dur)} ms` : '—'}</strong></button></li>)}</ol>
+      </section>}
+      </div>
+      <aside className="inspector sim-results" aria-label="Simulation results">
       {result ? (
         <div className="results">
           {result.mode === 'rate' ? (
@@ -1205,7 +1151,7 @@ function SimulateMode({
                 <p className="eyebrow">By request path</p>
                 {result.pathStats.map((item, index) => <div className="path-row" key={item.path.id}><div><strong>{item.path.label}</strong><small>{(item.share * 100).toFixed(1)}% of traffic</small></div><span>p99 {Math.round(item.p99)} ms</span><span>{(item.err * 100).toFixed(2)}% errors</span><button type="button" className="text-button" onClick={() => startTrace(index)}>Trace request</button></div>)}
               </section>
-              <section className="explanation-card"><div className="card-heading"><div><p className="eyebrow">Request timeline</p><h2>Playback and single-request trace</h2></div><button className="button quiet" type="button" disabled={!check?.valid} onClick={startPlayback}>Play full scenario</button></div><p>Use a trace above to step through the calls, compute, and data operations for one path, or play the traffic shape over time.</p></section>
+              <section className="explanation-card"><div className="card-heading"><div><p className="eyebrow">Request timeline</p><h2>Playback and single-request trace</h2></div></div><p>Use a trace above to step through the calls, compute, and data operations for one path, or play the traffic shape over time.</p></section>
               {result.stress && <section className="explanation-card"><p className="eyebrow">Maximum throughput</p><h2>{result.stress.slo ? `Within goal up to about ${Math.round(result.stress.slo)} requests/s` : `Misses the goal at light load`}</h2><p>{result.stress.first ? `${result.stress.first.label} fills first: ${result.stress.first.what}.` : `Scenario load: ${Math.round(E.scenarioRate(scenario))} requests/s.`}</p><div className="stress-points">{result.stress.pts.map((point) => <span key={point.lam}>{Math.round(point.lam)}/s · p99 {Math.round(point.p99)} ms · {(point.err * 100).toFixed(1)}% errors</span>)}</div></section>}
             </>
           ) : (
@@ -1222,19 +1168,7 @@ function SimulateMode({
       ) : (
         <div className="simulation-empty"><span className="simulation-symbol">◷</span><strong>Run a scenario to see the bottleneck</strong><span>Results are deterministic for the same design and seed, and every value is an approximate learning estimate.</span></div>
       )}
-      {playback && frame && <section className="playback-panel">
-        <div className="card-heading"><div><p className="eyebrow">Scenario playback</p><h2>{Math.round(frame.t / 60)} min · {Math.round(frame.lam)} req/s</h2></div><button type="button" className="text-button" onClick={() => setPlayback(null)}>Close</button></div>
-        <div className="playback-controls"><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: !state.playing }))}>{playback.playing ? 'Pause' : 'Play'}</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.max(0, state.index - 1) }))}>Back</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.min(state.timeline.frames.length - 1, state.index + 1) }))}>Step</button><label>Speed<select value={playback.speed} onChange={(event) => setPlayback((state) => ({ ...state, speed: Number(event.target.value) }))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><span>p50 {Math.round(frame.p50)} ms · p99 {Math.round(frame.p99)} ms · {(frame.err * 100).toFixed(2)}% errors</span></div>
-        <input aria-label="Playback position" className="playback-seek" type="range" min="0" max={playback.timeline.frames.length - 1} value={playback.index} onChange={(event) => setPlayback((state) => ({ ...state, playing: false, index: Number(event.target.value) }))} />
-        <div className="playback-resources">{Object.entries(frame.res).map(([key, resource]) => <div key={key}><span>{resource.label}</span><strong>{Math.round(resource.rho * 100)}% busy</strong><small>{resource.inst ? `${resource.inst} instances` : resource.what || ''}</small><i><b style={{ width: `${Math.min(100, resource.rho * 100)}%` }} /></i></div>)}</div>
-        <div className="playback-events">{playback.timeline.events.filter((event) => event.i <= playback.index).slice(-5).map((event, index) => <p key={`${event.i}-${index}`}>{event.msg}</p>)}</div>
-      </section>}
-      {trace && traceStep && <section className="playback-panel trace-panel">
-        <div className="card-heading"><div><p className="eyebrow">Single-request trace</p><h2>{trace.label}</h2></div><button type="button" className="text-button" onClick={() => setTrace(null)}>Close</button></div>
-        <div className="playback-controls"><button className="button quiet" disabled={trace.index <= 0} onClick={() => setTrace((state) => ({ ...state, index: state.index - 1 }))}>Back</button><button className="button quiet" disabled={trace.index >= trace.steps.length - 1} onClick={() => setTrace((state) => ({ ...state, index: state.index + 1 }))}>Step</button><span>Step {trace.index + 1} of {trace.steps.length} · {Math.round(traceStep.start + traceStep.dur)} ms of {Math.round(trace.steps.at(-1)?.start + trace.steps.at(-1)?.dur || 0)} ms</span></div>
-        <div className="trace-step"><strong>{traceStep.label}</strong><p>{traceStep.why || traceStep.kind}</p><small>{Math.round(traceStep.dur)} ms{traceStep.wait > 0.5 ? ` · ${Math.round(traceStep.wait)} ms waiting` : ''}{traceStep.rho != null ? ` · ${Math.round(traceStep.rho * 100)}% busy` : ''}</small></div>
-        <ol className="trace-steps">{trace.steps.map((item, index) => <li className={index === trace.index ? 'current' : index < trace.index ? 'complete' : ''} key={`${item.label}-${index}`}><button type="button" onClick={() => setTrace((state) => ({ ...state, index }))}><span>{item.label}</span><strong>{index <= trace.index ? `${Math.round(item.dur)} ms` : '—'}</strong></button></li>)}</ol>
-      </section>}
+      </aside>
     </section>
   );
 }

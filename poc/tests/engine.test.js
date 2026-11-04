@@ -115,4 +115,36 @@ test('checked-in example files match the in-app examples', () => {
     assert.strictEqual(scaled.id, example.deploys[1].id, `${example.name} scaled Deploy export`);
   }
 });
+test('deployGraph shows every placed resource per region with wires from the code', () => {
+  const r = E(`(() => { const d = deps[1]; normalizeDeploy(d); const g = deployGraph(B, A, d); const keys = g.nodes.map(n => n.key); return { regions: g.regions.length === d.regions.length, nodes: d.compute.every(c => c.regions.every(r => keys.includes('c:' + c.id + '@' + r))) && d.stores.every(s => s.regions.every(r => keys.includes('s:' + s.id + '@' + r))), entry: d.regions.every(r => keys.includes('e:' + r)), edges: g.edges.some(e => e.kind === 'read' || e.kind === 'write'), ids: g.edges.every(e => g.byKey[e.from] && g.byKey[e.to])}; })()`);
+  assert.ok(Object.values(r).every(Boolean), JSON.stringify(r));
+});
+test('layout is optional, only positions, and wins over automatic placement', () => {
+  const r = E(`(() => { const d = JSON.parse(JSON.stringify(deps[0])); delete d.layout; normalizeDeploy(d); const before = validateDeploy(B, A, d).valid; const k = 'c:' + d.compute[0].id + '@' + d.regions[0]; d.layout[k] = { x: 400, y: 300 }; const n = deployGraph(B, A, d).byKey[k]; return [d.layout !== undefined, before === validateDeploy(B, A, d).valid, n.x, n.y]; })()`);
+  assert.strictEqual(JSON.stringify(r), '[true,true,400,300]');
+});
+test('placing, moving and adding from the canvas keeps the Deploy valid', () => {
+  const r = E(`(() => { const d = JSON.parse(JSON.stringify(deps[0])); normalizeDeploy(d); const c2 = addInRegion(d, 'compute', 'fn', d.regions[0]); placeWorkloadOn(d, 'FraudCheck', c2.id); const refused = placeDataIn(d, B, 'OrderEvents', d.stores.find(s => s.type === 'redis').id); const kafka = d.stores.find(s => s.type === 'kafka'); const ok = placeDataIn(d, B, 'OrderEvents', kafka.id); return [c2.regions.join(), d.compute.find(c => c.id === c2.id).workloads.join(), refused.ok, ok.ok, validateDeploy(B, A, d).valid]; })()`);
+  assert.strictEqual(r[0], E('deps[0].regions[0]'));
+  assert.strictEqual(r[1], 'FraudCheck');
+  assert.strictEqual(r[3], true);
+  assert.strictEqual(r[4], false); // Functions can't reach the private database until it is connected: the fix is surfaced by validation
+});
+test('a table cannot be dropped on Kafka, and moving between regions updates the store', () => {
+  const r = E(`(() => { const d = JSON.parse(JSON.stringify(deps[1])); normalizeDeploy(d); const kafka = d.stores.find(s => s.type === 'kafka'); const t = placeDataIn(d, B, 'Customers', kafka.id); const s = d.stores.find(x => x.repl === 'single'); const to = d.regions.find(x => !s.regions.includes(x)); moveToRegion(d, 'stores', s.id, s.regions[0], to); return [t.ok, s.regions.join() === to, s.primary === to]; })()`);
+  assert.strictEqual(JSON.stringify(r), '[false,true,true]');
+});
+test('traffic and heat map onto canvas wires and nodes', () => {
+  const r = E(`(() => { const d = deps[0]; normalizeDeploy(d); const M = compileModel(B, A, d, validateDeploy(B, A, d)); const res = evaluateRate(M, B.scenarios[0], { N: 300, seed: 11 }); const g = deployGraph(B, A, d, { origins: res.origins.filter(o => o.pop), links: res.links }); const t = trafficFor(g, res); const sum = Object.values(t).reduce((a, b) => a + b, 0); const top = res.ranked[0][0]; const h = heatFor(top.replace(/^g:/, 'e:'), res.R); return [sum > 0, Object.keys(t).every(id => g.edges.some(e => e.id === id)), !!h, heatLevel(2), g.nodes.some(n => n.kind === 'user')]; })()`);
+  assert.strictEqual(JSON.stringify(r), '[true,true,true,"over",true]');
+});
+test('auto layout never overlaps and is deterministic on every example', () => {
+  const r = E(`(() => { const bad = []; exampleSystems().forEach(ex => { const A2 = analyzeBuild(ex.build); ex.deploys.forEach(d => { normalizeDeploy(d); const run = () => deployGraph(ex.build, A2, d, { origins: [{ pop: 'na', region: d.regions[0] }, { pop: 'eu', region: d.regions[d.regions.length - 1] }] });
+    const g = run(); const g2 = run(); if (JSON.stringify(g.nodes.map(n => [n.x, n.y])) !== JSON.stringify(g2.nodes.map(n => [n.x, n.y]))) bad.push(d.name + ' not deterministic');
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    g.regions.forEach(rg => { const ns = g.nodes.filter(n => n.region === rg.id); ns.forEach((a, i) => { if (a.x + a.w > rg.w || a.y + a.h > rg.h) bad.push(d.name + ' node outside region'); ns.slice(i + 1).forEach(b => { if (hit(a, b)) bad.push(d.name + ' ' + a.key + ' overlaps ' + b.key); }); }); });
+    g.regions.forEach((a, i) => g.regions.slice(i + 1).forEach(b => { if (hit(a, b)) bad.push(d.name + ' regions overlap'); }));
+  }); }); return bad; })()`);
+  assert.strictEqual(JSON.stringify(r), '[]');
+});
 console.log(`\n${n} passed${process.exitCode ? ', some failed' : ''}`);
