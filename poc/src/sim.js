@@ -166,7 +166,9 @@ function evaluateRate(M, sc, opt) {
     tot++; pathW[pi]++;
     if (r.sys) { sysErr++; pathErr[pi]++; why[r.sys] = (why[r.sys] || 0) + 1; }
     else if (r.biz) bizErr++;
-    all.add(r.t, 1); byPath[pi].add(r.t, 1); byPop[oi].add(r.t, 1);
+    // Latency percentiles describe requests that finished. A failed request stops early, so counting it
+    // would make an overloaded design look faster. Failures are reported separately (sysErr, why).
+    if (!r.sys) { all.add(r.t, 1); byPath[pi].add(r.t, 1); byPop[oi].add(r.t, 1); }
     if (!r.sys && (!slow || r.t > slow.t)) slow = { t: r.t, spans: r.spans, origin: o, path: paths[pi] };
   }
   const lags = {};
@@ -189,8 +191,17 @@ function evaluateRate(M, sc, opt) {
   Object.values(acc.flows).forEach(v => cAdd('Traffic between regions', v * 3600 * 4 / 1e6 * 0.02));
   Object.values(acc.repl).forEach(v => cAdd('Traffic between regions', v * 3600 * 2 / 1e6 * 0.02));
   const ranked = Object.entries(R).filter(([k, s]) => s.type !== 'external').sort((a, b) => b[1].rho - a[1].rho);
+  // Resources a request waits on directly, versus work done later by message consumers.
+  const onPath = new Set();
+  plans.forEach(row => row.forEach(plan => plan.forEach(g => {
+    if (g.kind === 'cpu' && g.comp) onPath.add('c:' + g.comp.id + '@' + g.region);
+    if ((g.kind === 'data' || g.kind === 'pub') && g.store) { onPath.add('s:' + g.store.id + '@' + g.target); onPath.add('conn:' + g.store.id); }
+    if (g.nat) onPath.add('n:' + g.nat);
+  })));
+  origins.forEach(o => { if (o.region) onPath.add('g:' + o.region); });
+  const pathRanked = ranked.filter(([k]) => onPath.has(k)), asyncRanked = ranked.filter(([k]) => !onPath.has(k));
   return {
-    mode: 'rate', lambda: lam, entry: e, paths, origins, R, ranked, links: acc.links, flows: acc.flows, repl: acc.repl, lags,
+    mode: 'rate', lambda: lam, entry: e, paths, origins, R, ranked, pathRanked, asyncRanked, samples: tot, ok: tot - sysErr, links: acc.links, flows: acc.flows, repl: acc.repl, lags,
     p50: all.q(0.5), p95: all.q(0.95), p99: all.q(0.99), sysErr: tot ? sysErr / tot : 0, bizErr: tot ? bizErr / tot : 0, why,
     pathStats: paths.map((p, i) => ({ path: p, share: pathW[i] / (tot || 1), p50: byPath[i].q(0.5), p99: byPath[i].q(0.99), err: pathW[i] ? pathErr[i] / pathW[i] : 0 })),
     popStats: origins.map((o, i) => ({ o, p50: byPop[i].q(0.5), p99: byPop[i].q(0.99) })), slow, cost, costBy
@@ -242,7 +253,9 @@ function runTracer(M, plan, R, rng, o, keepSpans) {
 function capacityLambda(M, sc) {
   const unit = evaluateRate(M, sc, { lambda: 1, N: 60 });
   let lamCap = Infinity, first = null;
-  Object.values(unit.R).forEach(s => {
+  // Only resources a request waits on can fail it; consumers behind a queue fall behind instead.
+  const pathKeys = new Set(unit.pathRanked.map(([k]) => k));
+  Object.entries(unit.R).filter(([k]) => !pathKeys.size || pathKeys.has(k)).map(([, s]) => s).forEach(s => {
     let capLam = Infinity;
     if (s.type === 'compute') { const C = s.ref; if (C.type === 'fn') capLam = (C.concurrency || 1000) / Math.max(1e-9, s.conc); else capLam = ((C.max || 1) * s.cores * 1000 * 0.97) / Math.max(1e-9, s.cpu); }
     else if (s.type === 'nat') capLam = NET.nat.cap * 0.97 / Math.max(1e-9, s.rps);
@@ -259,6 +272,50 @@ function stressTest(M, sc) {
   let slo = 0; pts.forEach(p => { if (p.p99 <= (sc.goalMs || Infinity) && p.err <= 0.01) slo = Math.max(slo, p.lam); });
   const order = Object.values(pts[pts.length - 1].R).filter(s => s.type !== 'external').sort((a, b) => b.rho - a.rho).slice(0, 4);
   return { lamCap, first, pts, slo, order };
+}
+
+/* ---------- reading a rate result: verdict and what to try next ---------- */
+// A plain-language verdict for a rate run against its goal. Failures over 1% count as a miss
+// before latency, because a design that drops requests can look fast.
+function rateVerdict(sc, r) {
+  const goal = sc.goalMs || 300; const failing = r.sysErr > 0.01;
+  const reasons = Object.entries(r.why || {}).sort((a, b) => b[1] - a[1]);
+  const status = failing ? 'fail' : r.p99 <= goal ? 'pass' : 'slow';
+  const head = status === 'pass' ? `Meets the ${Math.round(goal)} ms goal: 99% of requests finish within ${Math.round(r.p99)} ms.`
+    : status === 'fail' ? `Fails ${(r.sysErr * 100).toFixed(1)}% of requests${reasons[0] ? ` (mostly: ${reasons[0][0].toLowerCase()})` : ''}.`
+    : `Misses the ${Math.round(goal)} ms goal: the slowest 1% take ${Math.round(r.p99)} ms.`;
+  return { status, head, goal };
+}
+// Concrete next steps, most useful first. Each names the resource to open, so the UI can jump to it.
+function suggestionsFor(M, sc, r) {
+  const out = []; const goal = sc.goalMs || 300; const path = r.pathRanked || r.ranked;
+  const target = s => s.type === 'compute' ? { kind: 'compute', id: s.ref.id } : s.ref && s.ref.id ? { kind: 'store', id: s.ref.id } : null;
+  const conn = path.find(([, s]) => s.type === 'conn' && s.rho > 0.9);
+  if (conn) { const s = conn[1]; out.push({ id: 'conn', text: `${s.ref.name} is running out of connections: instances want ${Math.round(s.want)}, it allows ${Math.round(s.cap)}. Use a bigger size, fewer instances, or a connection pooler.`, target: target(s) }); }
+  const hot = path.find(([, s]) => s.type !== 'conn' && s.rho > 0.9);
+  if (hot) {
+    const s = hot[1]; let tip = '';
+    if (s.type === 'compute') tip = s.ref.type === 'fn' ? 'Raise its concurrency limit, or move it to containers that serve many requests each.' : `Raise its maximum instances (now ${s.ref.max || 1}) or use a bigger size.`;
+    else if (s.type === 'store') tip = s.ref.shards > 1 ? 'Add shards, add read copies, or move lookups to a faster store.' : 'Add shards, add read copies for reads, or use a bigger size.';
+    else if (s.type === 'gateway') tip = 'Raise the gateway limit or use a load balancer instead.';
+    else if (s.type === 'nat') tip = 'Use private endpoints for managed services, or a NAT gateway per region.';
+    out.push({ id: 'hot', text: `${s.label} is ${Math.round(s.rho * 100)}% busy (${s.what}). ${tip}`, target: target(s) });
+  }
+  if (r.slow) {
+    const far = r.slow.spans.filter(x => x[4] && ((x[4].kind === 'net' && x[4].from !== x[4].to && !x[4].external) || ((x[4].kind === 'data' || x[4].kind === 'pub') && x[4].target !== x[4].region))).sort((a, b) => b[2] - a[2])[0];
+    if (far && far[2] > goal * 0.15) {
+      const g = far[4]; const isData = g.kind !== 'net'; const C = !isData && g.s && M.comp[g.s.w];
+      out.push({ id: 'far', text: `${far[0]} crosses regions and takes ${Math.round(far[2])} ms of the slowest request. ${isData ? `Put copies of ${g.store.name} in more regions, or change how it copies across regions.` : `Run ${g.s.w} in more regions.`}`, target: isData ? { kind: 'store', id: g.store.id } : C ? { kind: 'compute', id: C.id } : null });
+    }
+  }
+  // Users far from every region that runs the entry point: distance is a floor no tuning removes.
+  const farPop = (r.popStats || []).filter(x => x.o.pop && x.o.region && x.o.reach > goal * 0.3).sort((a, b) => b.o.reach - a.o.reach)[0];
+  if (farPop) { const C = M.comp[r.entry && r.entry.w]; out.push({ id: 'pop', text: `Users in ${POPS[farPop.o.pop].label} spend about ${Math.round(farPop.o.reach)} ms just reaching ${REGIONS[farPop.o.region].code}, and their p99 is ${Math.round(farPop.p99)} ms. Run ${r.entry ? r.entry.w : 'the entry point'} in a region closer to them, with the data it reads.`, target: C ? { kind: 'compute', id: C.id } : null }); }
+  const loopStep = r.paths[0] && r.paths[0].steps.find(x => x.loop && !x.loop.file && x.loop.par <= 1 && x.k === 'data' && x.loop.n > 1);
+  if (loopStep) out.push({ id: 'loop', text: `${loopStep.w} reads ${loopStep.d} ${loopStep.loop.n} times one after another (line ${loopStep.loop.line}). Read them in one query, or add parallel, to save ${loopStep.loop.n - 1} round trips.`, target: { kind: 'build', workload: loopStep.w, line: loopStep.loop.line } });
+  Object.entries(r.lags || {}).forEach(([d, l]) => { if (l.lagS > 60) out.push({ id: 'lag:' + d, text: `${d} falls behind: ${Math.round(l.pubRate)} messages/s arrive and ${l.consumer.split('.')[0]} handles about ${Math.round(l.capRate)}/s. Requests still succeed, but the work is late. Add partitions or consumer capacity.`, target: M.store[d] ? { kind: 'store', id: M.store[d].id } : null }); });
+  if (!out.length && r.sysErr <= 0.01 && r.p99 <= goal) { const top = path[0] && path[0][1]; if (top && top.rho > 0) out.push({ id: 'headroom', text: `Plenty of room. ${top.label} would fill first, at about ${Math.round(r.lambda / top.rho)} requests/s. Try more traffic or Find max throughput.`, target: target(top) }); }
+  return out;
 }
 
 /* ---------- batch scenarios (file drops, scheduled jobs) ---------- */
@@ -365,4 +422,4 @@ function stepRequest(M, sc, path, origin, R) {
   if (grp) t = gs + gmax;
   return { steps, total: t };
 }
-if (typeof module !== 'undefined') module.exports = { simulateTimeline, stepRequest, shapeAt, evaluateRate, evaluateBatch, stressTest, tracePath, compileModel, scenarioMode, scenarioRate, entryInfo, planPath, fmtN };
+if (typeof module !== 'undefined') module.exports = { rateVerdict, suggestionsFor, simulateTimeline, stepRequest, shapeAt, evaluateRate, evaluateBatch, stressTest, tracePath, compileModel, scenarioMode, scenarioRate, entryInfo, planPath, fmtN };

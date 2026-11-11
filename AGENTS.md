@@ -21,6 +21,9 @@ npm run test:ui                       # Playwright smoke tests for React changes
 npm run test:legacy-ui                # smoke test the original standalone UI
 ```
 
+The smoke tests use Playwright's own Chromium. To use another build (for example a preinstalled one whose
+version doesn't match), set `CHROMIUM_PATH` to its executable. A ready-made GitHub Actions workflow that runs all three suites is described in the PR that added `CHROMIUM_PATH`.
+
 The current UI uses React, Vite, and React Flow. The original standalone proof of
 concept remains in `poc/`; `poc/build.sh` concatenates its modules in a fixed order.
 The React app loads the pure engine modules from `poc/src/` through `scripts/copy-engine.mjs`.

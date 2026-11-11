@@ -568,3 +568,34 @@ button.map-ghost:hover i { box-shadow: 0 0 0 1.5px var(--accent); }
 
 .handle-quiet { opacity: 0; pointer-events: none; }
 .react-flow__edge-textwrapper, .edge-label { z-index: 6; }
+
+/* Simulate: verdict, next steps, throughput curve */
+.verdict-card { display: grid; gap: 4px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--line); border-left-width: 4px; border-radius: 11px; background: var(--surface); }
+.verdict-card strong { font-size: 14px; line-height: 1.35; }
+.verdict-card small { color: var(--muted); font-size: 11px; }
+.verdict-card.pass { border-left-color: var(--good); background: var(--good-soft); }
+.verdict-card.slow { border-left-color: var(--warn); background: var(--warn-soft); }
+.verdict-card.fail { border-left-color: var(--bad); background: var(--bad-soft); }
+.tips-card { border-color: var(--accent); }
+.tip-row { display: grid; gap: 4px; padding: 9px 0; border-top: 1px solid var(--line); }
+.tip-row:first-of-type { border-top: 0; }
+.tip-row p { margin: 0; color: var(--ink); font-size: 12px; line-height: 1.45; }
+.tip-row .text-button { justify-self: start; }
+.reason-row strong.bad-text { color: var(--bad); }
+.explanation-card .reason-row strong { white-space: normal; text-align: right; }
+.stress-chart { display: block; width: 100%; height: auto; margin: 6px 0; font-size: 9px; }
+.stress-chart text { fill: var(--muted); }
+.stress-chart .axis { stroke: var(--line); }
+.stress-chart .goal-line { stroke: var(--bad); stroke-dasharray: 4 3; }
+.stress-chart .goal-label { fill: var(--bad); }
+.stress-chart .now-line { stroke: var(--muted); stroke-dasharray: 2 3; }
+.stress-chart .p99-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.stress-chart .p99-dot { fill: var(--accent); }
+.stress-chart .fail-bar { fill: var(--bad); opacity: .45; }
+.stress-card small { color: var(--muted); font-size: 10px; }
+
+/* Desktop: the workspace fills the window so the canvas fits on screen; side panels scroll on their own. */
+@media (min-width: 1121px) {
+  .workspace { flex: none; height: calc(100vh - 116px); min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .canvas-column { min-height: 0; overflow-y: auto; }
+}

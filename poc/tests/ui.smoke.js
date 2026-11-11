@@ -8,7 +8,7 @@ const page_ = 'file://' + path.join(__dirname, '..', 'loadbearing.html');
 const out = path.join(__dirname, 'out'); fs.mkdirSync(out, { recursive: true });
 const shot = (p, n) => p.screenshot({ path: path.join(out, n + '.png') });
 (async () => {
-  const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+  const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined }); const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
   const errs = []; p.on('pageerror', e => errs.push('page error: ' + e.message));
   p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_/.test(m.text())) errs.push('console: ' + m.text()); });
   const check = (cond, msg) => { if (!cond) errs.push('check failed: ' + msg); else console.log('ok  ', msg); };
