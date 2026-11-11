@@ -31,6 +31,8 @@ window.Loadbearing = {
   normalizeDeploy,
   originsFor,
   runEntry,
+  rateVerdict,
+  suggestionsFor,
   scenarioMode,
   scenarioRate,
   simulateTimeline,

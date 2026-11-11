@@ -84,6 +84,42 @@ test('all system-design examples have valid Builds and Deploys', () => {
     }
   }
 });
+// URL shortener starter under its redirect rush: links-db overloads, ClickWorker falls behind.
+E(`var urlRun = (() => { const x = exampleSystems().find(e => /URL/.test(e.name)); const a = analyzeBuild(x.build); const sc = x.build.scenarios.find(s => /Redirect/.test(s.entry));
+  const run = d => { normalizeDeploy(d); const m = compileModel(x.build, a, d, validateDeploy(x.build, a, d)); return { m, r: evaluateRate(m, sc, { seed: 11 }) }; };
+  return { sc, starter: run(x.deploys[0]), scaled: run(x.deploys[1]) }; })()`);
+test('failed requests do not count toward latency percentiles', () => {
+  const r = E(`(() => { const r = urlRun.starter.r; return { sysErr: r.sysErr, ok: r.ok, samples: r.samples }; })()`);
+  assert.ok(r.sysErr > 0.05, 'starter fails under the rush');
+  assert.strictEqual(r.ok + Math.round(r.sysErr * r.samples), r.samples);
+  // an overloaded run's percentiles only describe finished requests: lighter load never reports a higher p50 than the overloaded one
+  const light = E(`(() => { const s = Object.assign({}, urlRun.sc, { count: urlRun.sc.count / 50 }); return evaluateRate(urlRun.starter.m, s, { seed: 11 }).p50; })()`);
+  assert.ok(light <= E('urlRun.starter.r.p50'), 'light load is not slower than overload');
+});
+test('request path limits are separate from async consumers', () => {
+  const r = E(`(() => { const r = urlRun.starter.r; return { path: r.pathRanked.map(([k, s]) => s.ref && s.ref.name), async: r.asyncRanked.map(([k, s]) => s.ref && s.ref.name), lag: Object.values(r.lags).map(l => l.lagS) }; })()`);
+  assert.strictEqual(r.path[0], 'links-db');
+  assert.ok(r.async.includes('analytics-db'), 'analytics-db is behind the queue');
+  assert.ok(!r.path.includes('analytics-db'));
+  assert.ok(r.lag.some(v => v > 60), 'click consumer falls behind');
+});
+test('verdict and suggestions explain a failing run', () => {
+  const v = E(`rateVerdict(urlRun.sc, urlRun.starter.r)`);
+  assert.strictEqual(v.status, 'fail');
+  assert.ok(/links-db/.test(v.head));
+  const tips = E(`suggestionsFor(urlRun.starter.m, urlRun.sc, urlRun.starter.r)`);
+  const hot = tips.find(t => t.id === 'hot');
+  assert.ok(hot && /links-db/.test(hot.text) && hot.target.kind === 'store');
+  assert.ok(tips.some(t => t.id.startsWith('lag:')), 'backlog suggestion');
+  assert.ok(tips.some(t => t.id === 'pop'), 'far users suggestion');
+  assert.strictEqual(E(`rateVerdict(urlRun.sc, urlRun.scaled.r).status === 'fail'`), false);
+});
+test('max throughput is set by the request path, not by consumers behind a queue', () => {
+  const st = E(`(() => { const s = stressTest(urlRun.starter.m, urlRun.sc); return { first: s.first.ref.name, cap: s.lamCap }; })()`);
+  assert.strictEqual(st.first, 'links-db');
+  assert.ok(st.cap > 1000);
+});
+
 test('system-design examples simulate a rate scenario and a batch scenario', () => {
   const results = E(`exampleSystems().map(x => {
     const a = analyzeBuild(x.build), d = x.deploys[0];

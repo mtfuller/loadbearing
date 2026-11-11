@@ -35,8 +35,8 @@ function Placement({ items, placedOn, kind, onPlace }) {
   });
 }
 
-export function DeployMode({ build, analysis, deploy, check, updateDeploy }) {
-  const [selectedKey, setSelectedKey] = useState(null);
+export function DeployMode({ build, analysis, deploy, check, updateDeploy, focusKey = null }) {
+  const [selectedKey, setSelectedKey] = useState(focusKey);
   const [notice, setNotice] = useState('');
   const pendingSelect = useRef(null);
   useEffect(() => { if (pendingSelect.current) { setSelectedKey(pendingSelect.current); pendingSelect.current = null; } }, [deploy]);

@@ -10,7 +10,8 @@ import {
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
-  useReactFlow
+  useReactFlow,
+  useNodesInitialized
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
@@ -49,6 +50,7 @@ function App() {
   const [docs, setDocs] = useState(initialDocs);
   const [mode, setMode] = useState('build');
   const [selection, setSelection] = useState(null);
+  const [deployFocus, setDeployFocus] = useState(null);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [scenarioId, setScenarioId] = useState('');
@@ -239,6 +241,7 @@ function App() {
     setResult(currentResult);
     setComparison({
       scenarioName: scenario.name,
+      goalMs: scenario.goalMs,
       left: { name: deploy.name, result: currentResult },
       right: { name: other.name, result: otherResult }
     });
@@ -431,9 +434,26 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  // Jump from a Simulate suggestion to the thing it names, in Deploy or Build.
+  const openTarget = (target) => {
+    if (!target) return;
+    if (target.kind === 'build') {
+      const workload = docs.build.workloads.find((item) => item.name === target.workload);
+      if (workload) setSelection({ type: 'workload', id: workload.id });
+      setMode('build');
+      return;
+    }
+    const list = target.kind === 'compute' ? deploy.compute : deploy.stores;
+    const item = list.find((entry) => entry.id === target.id);
+    if (!item) return;
+    setDeployFocus(`${target.kind === 'compute' ? 'c' : 's'}:${item.id}@${item.regions?.[0] || deploy.regions[0]}`);
+    setMode('deploy');
+  };
+
   const switchMode = (nextMode) => {
     if (nextMode === 'deploy' && !analysis.valid) return;
     if (nextMode === 'simulate' && !canSimulate) return;
+    setDeployFocus(null);
     setMode(nextMode);
   };
 
@@ -488,7 +508,7 @@ function App() {
           rewindBuildStep={rewindBuildStep}
         />
       )}
-      {mode === 'deploy' && <DeployMode build={docs.build} analysis={analysis} deploy={deploy} check={deployCheck} updateDeploy={updateDeploy} />}
+      {mode === 'deploy' && <DeployMode build={docs.build} analysis={analysis} deploy={deploy} check={deployCheck} updateDeploy={updateDeploy} focusKey={deployFocus} />}
       {mode === 'simulate' && (
         <SimulateMode
           build={docs.build}
@@ -515,6 +535,7 @@ function App() {
           trace={trace}
           setTrace={setTrace}
           startTrace={startTrace}
+          openTarget={openTarget}
         />
       )}
       {dialog && <LibraryDialog
@@ -578,8 +599,11 @@ const nodeTypes = { workload: WorkloadNode, data: DataNode };
 function BuildMode({ build, analysis, selection, setSelection, addWorkload, addData, updateBuild, stepSession, startBuildStep, advanceBuildStep, rewindBuildStep }) {
   const [nodes, setNodes] = useState([]);
   const [buildName, setBuildName] = useState(build.name);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   useEffect(() => setBuildName(build.name), [build.name]);
+  // Fit the whole Build into view when a different Build opens (first load, an example, a library load).
+  const nodesReady = useNodesInitialized();
+  useEffect(() => { if (nodesReady) fitView({ padding: 0.08 }); }, [nodesReady, build.id, fitView]);
   const graphNodes = useMemo(() => [
     ...build.workloads.map((workload) => ({
       id: `w:${workload.id}`,
@@ -730,7 +754,7 @@ function BuildMode({ build, analysis, selection, setSelection, addWorkload, addD
             proOptions={{ hideAttribution: true }}
           >
             <Background color="#d7d7d0" gap={22} />
-            <MiniMap pannable zoomable nodeColor={(node) => node.type === 'data' ? '#e5b35d' : '#8588e9'} />
+            {build.workloads.length + build.data.length > 24 && <MiniMap pannable zoomable position="top-right" nodeColor={(node) => node.type === 'data' ? '#e5b35d' : '#8588e9'} />}
             <Controls />
           </ReactFlow>
           {build.workloads.length === 0 && build.data.length === 0 && (
@@ -1023,11 +1047,14 @@ function SimulateMode({
   build, analysis, deploy, check, offline = [], toggleOffline, updateDeploy, scenarioId, setScenarioId, result, runScenario,
   activeExample, comparison, compareDeploys,
   updateScenario, startNewScenario, duplicateScenario, deleteScenario, startPlayback,
-  playback, setPlayback, trace, setTrace, startTrace
+  playback, setPlayback, trace, setTrace, startTrace, openTarget
 }) {
   const scenario = build.scenarios.find((item) => item.id === scenarioId);
   const mode = scenario ? E.scenarioMode(analysis, scenario) : null;
-  const limiting = result?.mode === 'rate' ? result.ranked?.[0]?.[1] : result?.limits?.[0];
+  const limiting = result?.mode === 'rate' ? (result.pathRanked || result.ranked)?.[0]?.[1] : result?.limits?.[0];
+  const verdict = result?.mode === 'rate' && scenario ? E.rateVerdict(scenario, result) : null;
+  const tips = result?.mode === 'rate' && scenario && check?.valid ? E.suggestionsFor(E.compileModel(build, analysis, deploy, check), scenario, result) : [];
+  const behind = result?.mode === 'rate' ? Object.entries(result.lags || {}) : [];
   const entry = scenario ? E.entryInfo(analysis, scenario.entry) : null;
   const conditions = scenario ? E.conditionsFor(analysis, scenario.entry) : [];
   useEffect(() => {
@@ -1135,24 +1162,34 @@ function SimulateMode({
         <div className="results">
           {result.mode === 'rate' ? (
             <>
+              {verdict && <section className={`verdict-card ${verdict.status}`} role="status"><strong>{verdict.head}</strong><small>At {Math.round(result.lambda).toLocaleString()} requests/s, the busiest moment of this scenario.</small></section>}
               <div className="metric-grid">
-                <Metric label="p50 latency" value={`${Math.round(result.p50)} ms`} hint="Half of sampled requests finish faster." />
-                <Metric label="p99 latency" value={`${Math.round(result.p99)} ms`} hint="99% of sampled requests finish faster." />
+                <Metric label="p50 latency" value={result.ok ? `${Math.round(result.p50)} ms` : '—'} hint="Half of the requests that finished were faster." />
+                <Metric label="p99 latency" value={result.ok ? `${Math.round(result.p99)} ms` : '—'} hint={`99% of the requests that finished were faster. Goal: ${Math.round(verdict?.goal || 0)} ms.`} />
                 <Metric label="System failures" value={`${(result.sysErr * 100).toFixed(2)}%`} hint="Requests that failed due to a system limit." />
                 <Metric label="Estimated cost" value={`$${result.cost.toFixed(2)}/h`} hint="Directional estimate from model assumptions." />
               </div>
+              {tips.length > 0 && <section className="explanation-card tips-card" aria-label="What to try next">
+                <p className="eyebrow">What to try next</p>
+                {tips.map((tip) => <div className="tip-row" key={tip.id}><p>{tip.text}</p>{tip.target && <button type="button" className="text-button" onClick={() => openTarget(tip.target)}>{tip.target.kind === 'build' ? 'Open in Build' : 'Open in Deploy'}</button>}</div>)}
+              </section>}
               <section className="explanation-card">
                 <p className="eyebrow">What limits this run</p>
                 <h2>{limiting?.ref?.name || limiting?.name || 'No single resource is saturated'}</h2>
-                <p>{limiting ? `${Math.round((limiting.rho || 0) * 100)}% utilized at approximately ${Math.round(result.lambda)} requests per second.` : 'Try a higher request rate or a different design to reveal a bottleneck.'}</p>
-                {Object.entries(result.why || {}).slice(0, 3).map(([reason, count]) => <div className="reason-row" key={reason}><span>{reason}</span><strong>{Math.round(count / 6)}% of sampled requests</strong></div>)}
+                <p>{limiting ? `The busiest thing requests wait on: ${Math.round((limiting.rho || 0) * 100)}% busy (${limiting.what || 'load'}) at about ${Math.round(result.lambda).toLocaleString()} requests per second.` : 'Try a higher request rate or a different design to reveal a bottleneck.'}</p>
+                {Object.entries(result.why || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([reason, count]) => <div className="reason-row" key={reason}><span>{reason}</span><strong>{(count / (result.samples || 1) * 100).toFixed(1)}% of requests failed here</strong></div>)}
               </section>
+              {behind.length > 0 && <section className="explanation-card" aria-label="Work that happens later">
+                <p className="eyebrow">Work that happens later</p>
+                <p>Messages are handled after the request returns, so a slow consumer builds a backlog instead of failing requests.</p>
+                {behind.map(([name, lag]) => <div className="reason-row" key={name}><span>{name} → {lag.consumer.split('.')[0]}</span><strong className={lag.lagS > 60 ? 'bad-text' : ''}>{lag.lagS > 60 ? `falls ${formatDuration(lag.lagS)} behind` : `keeps up (${Math.round(lag.pubRate).toLocaleString()}/s in, room for ${Number.isFinite(lag.capRate) ? Math.round(lag.capRate).toLocaleString() : 'plenty'}/s)`}</strong></div>)}
+              </section>}
+              {result.stress && <StressCard stress={result.stress} scenario={scenario} />}
               <section className="explanation-card">
                 <p className="eyebrow">By request path</p>
-                {result.pathStats.map((item, index) => <div className="path-row" key={item.path.id}><div><strong>{item.path.label}</strong><small>{(item.share * 100).toFixed(1)}% of traffic</small></div><span>p99 {Math.round(item.p99)} ms</span><span>{(item.err * 100).toFixed(2)}% errors</span><button type="button" className="text-button" onClick={() => startTrace(index)}>Trace request</button></div>)}
+                {result.pathStats.map((item, index) => <div className="path-row" key={item.path.id}><div><strong>{item.path.label}</strong><small>{(item.share * 100).toFixed(1)}% of traffic</small></div><span>{item.err < 1 ? `p99 ${Math.round(item.p99)} ms` : 'all failed'}</span><span>{(item.err * 100).toFixed(2)}% errors</span><button type="button" className="text-button" onClick={() => startTrace(index)}>Trace request</button></div>)}
               </section>
               <section className="explanation-card"><div className="card-heading"><div><p className="eyebrow">Request timeline</p><h2>Playback and single-request trace</h2></div></div><p>Use a trace above to step through the calls, compute, and data operations for one path, or play the traffic shape over time.</p></section>
-              {result.stress && <section className="explanation-card"><p className="eyebrow">Maximum throughput</p><h2>{result.stress.slo ? `Within goal up to about ${Math.round(result.stress.slo)} requests/s` : `Misses the goal at light load`}</h2><p>{result.stress.first ? `${result.stress.first.label} fills first: ${result.stress.first.what}.` : `Scenario load: ${Math.round(E.scenarioRate(scenario))} requests/s.`}</p><div className="stress-points">{result.stress.pts.map((point) => <span key={point.lam}>{Math.round(point.lam)}/s · p99 {Math.round(point.p99)} ms · {(point.err * 100).toFixed(1)}% errors</span>)}</div></section>}
             </>
           ) : (
             <>
@@ -1186,10 +1223,9 @@ function ComparisonPanel({ comparison }) {
       { label: 'Finish time', left: `${Math.ceil(left.result.finishS / 60)} min`, right: `${Math.ceil(right.result.finishS / 60)} min`, a: left.result.finishS, b: right.result.finishS },
       { label: 'Rows completed', left: (left.result.done || 0).toLocaleString(), right: (right.result.done || 0).toLocaleString(), a: left.result.done || 0, b: right.result.done || 0 }
     ];
-  const leadMetric = metrics[0];
-  const faster = leadMetric.a === leadMetric.b ? 'Both designs have the same modeled result for this measure.' : `${leadMetric.b < leadMetric.a ? right.name : left.name} has the lower ${leadMetric.label.toLowerCase()} (${Math.abs(Math.round((leadMetric.b - leadMetric.a) / (leadMetric.a || 1) * 100))}% lower).`;
+  const faster = isRate ? compareRate(left, right, comparison.goalMs) : compareBatch(left, right);
   const limiting = (result) => result.mode === 'rate'
-    ? result.ranked?.[0]?.[1]?.ref?.name || result.ranked?.[0]?.[1]?.name || 'no single saturated resource'
+    ? (result.pathRanked || result.ranked)?.[0]?.[1]?.ref?.name || 'no single saturated resource'
     : result.limits?.[0]?.what || 'workload path';
   return (
     <section className="explanation-card comparison-card" aria-label="Design comparison">
@@ -1202,6 +1238,71 @@ function ComparisonPanel({ comparison }) {
       </div>
       <p>{faster}</p>
       <p className="comparison-limits">The first design is mainly limited by {limiting(left.result)}; the second by {limiting(right.result)}. These are directional learning estimates.</p>
+    </section>
+  );
+}
+
+// Compare two rate runs the way an engineer would: dropped requests first, then the goal, then speed and cost.
+function compareRate(left, right, goalMs) {
+  const a = left.result, b = right.result, goal = goalMs || 300;
+  const pct = (value) => `${(value * 100).toFixed(1)}%`;
+  const costNote = (winner, loser) => {
+    const ratio = winner.result.cost / Math.max(0.01, loser.result.cost);
+    return ratio > 1.15 ? ` It costs ${ratio.toFixed(ratio < 10 ? 1 : 0)}× as much ($${winner.result.cost.toFixed(2)}/h vs $${loser.result.cost.toFixed(2)}/h).` : ratio < 0.87 ? ` It is also cheaper ($${winner.result.cost.toFixed(2)}/h vs $${loser.result.cost.toFixed(2)}/h).` : '';
+  };
+  const failA = a.sysErr > 0.01, failB = b.sysErr > 0.01;
+  if (failA !== failB) { const [win, lose] = failA ? [right, left] : [left, right]; return `${win.name} handles the load; ${lose.name} fails ${pct(lose.result.sysErr)} of requests.${costNote(win, lose)}`; }
+  if (failA && failB) { const [win, lose] = a.sysErr <= b.sysErr ? [left, right] : [right, left]; return `Both designs drop requests: ${win.name} fails ${pct(win.result.sysErr)}, ${lose.name} fails ${pct(lose.result.sysErr)}.`; }
+  const metA = a.p99 <= goal, metB = b.p99 <= goal;
+  if (metA !== metB) { const [win, lose] = metA ? [left, right] : [right, left]; return `${win.name} meets the ${Math.round(goal)} ms goal; ${lose.name} misses it (p99 ${Math.round(lose.result.p99)} ms).${costNote(win, lose)}`; }
+  if (Math.abs(a.p99 - b.p99) / Math.max(1, Math.min(a.p99, b.p99)) < 0.05) return `Both designs ${metA ? 'meet' : 'miss'} the goal with about the same p99 (${Math.round(a.p99)} vs ${Math.round(b.p99)} ms).${a.cost !== b.cost ? ` ${a.cost < b.cost ? left.name : right.name} is cheaper.` : ''}`;
+  const [win, lose] = a.p99 < b.p99 ? [left, right] : [right, left];
+  return `${win.name} is faster: p99 ${Math.round(win.result.p99)} ms vs ${Math.round(lose.result.p99)} ms.${costNote(win, lose)}`;
+}
+
+function compareBatch(left, right) {
+  const a = left.result, b = right.result;
+  if (a.finishS === b.finishS) return 'Both designs finish in the same modeled time.';
+  const [win, lose] = a.finishS < b.finishS ? [left, right] : [right, left];
+  return `${win.name} finishes sooner: ${Math.ceil(win.result.finishS / 60)} min vs ${Math.ceil(lose.result.finishS / 60)} min.`;
+}
+
+function formatDuration(seconds) {
+  if (seconds < 90) return `${Math.round(seconds)} s`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)} min`;
+  return `${(seconds / 3600).toFixed(1)} h`;
+}
+
+// p99 and failures as load rises, with the goal line: where the design stops keeping up.
+function StressCard({ stress, scenario }) {
+  const goal = scenario?.goalMs || 300;
+  const pts = stress.pts;
+  const rate = Math.round(E.scenarioRate(scenario || {}));
+  const xmax = Math.max(...pts.map((p) => p.lam), rate * 1.05, 1);
+  const ymax = Math.max(goal * 1.5, ...pts.map((p) => Math.min(p.p99, goal * 4)));
+  const W = 320, H = 170, L = 44, R = 10, T = 12, B = 28;
+  const X = (v) => L + v / xmax * (W - L - R);
+  const Y = (v) => T + (1 - Math.min(v, ymax) / ymax) * (H - T - B);
+  const line = pts.filter((p) => p.err < 1).map((p, i) => `${i ? 'L' : 'M'}${X(p.lam).toFixed(1)} ${Y(p.p99).toFixed(1)}`).join(' ');
+  return (
+    <section className="explanation-card stress-card" aria-label="Maximum throughput">
+      <p className="eyebrow">Maximum throughput</p>
+      <h2>{stress.slo ? `Meets the goal up to about ${Math.round(stress.slo).toLocaleString()} requests/s` : `Misses the goal even at light load (p99 ${Math.round(pts[0]?.p99 || 0)} ms)`}</h2>
+      <p>{stress.first ? `${stress.first.label} fills first (${stress.first.what}) at about ${Math.round(stress.lamCap).toLocaleString()} requests/s. ` : ''}This scenario peaks at {rate.toLocaleString()} requests/s.</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="stress-chart" role="img" aria-label="p99 latency and failures as requests per second rise">
+        <line x1={L} x2={W - R} y1={H - B} y2={H - B} className="axis" />
+        <text x={L - 6} y={Y(0) + 4} textAnchor="end">0</text>
+        <text x={L - 6} y={Y(ymax) + 4} textAnchor="end">{Math.round(ymax)} ms</text>
+        <text x={L} y={H - 8}>0/s</text>
+        <text x={W - R} y={H - 8} textAnchor="end">{Math.round(xmax).toLocaleString()}/s</text>
+        {pts.map((p) => p.err > 0 && <rect key={`e${p.lam}`} x={X(p.lam) - 5} width="10" y={H - B - p.err * (H - T - B)} height={p.err * (H - T - B)} className="fail-bar" />)}
+        <line x1={L} x2={W - R} y1={Y(goal)} y2={Y(goal)} className="goal-line" />
+        <text x={W - R} y={Y(goal) - 4} textAnchor="end" className="goal-label">goal {Math.round(goal)} ms</text>
+        {rate > 0 && <line x1={X(rate)} x2={X(rate)} y1={T} y2={H - B} className="now-line" />}
+        <path d={line} className="p99-line" />
+        {pts.filter((p) => p.err < 1).map((p) => <circle key={p.lam} cx={X(p.lam)} cy={Y(p.p99)} r="2.5" className="p99-dot" />)}
+      </svg>
+      <small>Line: p99 of requests that finished. Bars: share that failed.{rate > 0 ? ' Dashed vertical line: this scenario\'s peak.' : ''}</small>
     </section>
   );
 }
