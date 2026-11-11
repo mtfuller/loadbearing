@@ -35,7 +35,7 @@ The React app loads the pure engine modules from `poc/src/` through `scripts/cop
 | The workload language, checks, path enumeration | `poc/src/lang.js` |
 | Step-through behavior or mock data | `poc/src/run.js`, React presentation in `src/main.jsx` |
 | Products, regions, network rules, Deploy validation | `poc/src/infra.js` (v1 moves products to `catalog/*.json`) |
-| Latency, capacity, queueing, playback, stress, batch | `poc/src/sim.js` |
+| Latency, capacity, queueing, playback, stress, batch, experiments (`faultOptions`, `applyFault`) | `poc/src/sim.js` |
 | Example Build and Deploys | `poc/src/starter.js` (regenerate `examples/` after) |
 | React UI and Build canvas | `src/main.jsx` |
 | Deploy editor, shared infrastructure canvas, Simulate traffic view | `src/deploy-mode.jsx`, `src/infra-canvas.jsx`, `src/world-map.jsx` (world-map view: pins that open into cards, zoom/pan; land outlines are a local Natural Earth 110m asset in `src/world-land.js`, no network), `src/simulate-canvas.jsx` (graph, placement and traffic helpers live in `poc/src/infra.js`) |
@@ -67,4 +67,4 @@ The React app loads the pure engine modules from `poc/src/` through `scripts/cop
 1. Assumptions page (L7): list every constant in `sim.js` and `infra.js` with an editable value and a reset.
 2. Compare runs (S8): keep the last two results per scenario and show them side by side, with differences explained.
 3. Catalog loader (D7, step 1): express today's `COMPUTE`, `STORES` and `NET` in the `catalog/` format, then load from it with no behavior change. The tests must still pass.
-4. Availability zones (D8): add `zones` to the Deploy schema, show them collapsed on the region boxes, and add a zone-loss event to playback.
+4. Availability zones, part 2 (D8): subnets per zone and zonal versus regional NAT. Zone counts and zone-loss experiments exist (`zonesOf` in `infra.js`, `applyFault` in `sim.js`).

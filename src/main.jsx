@@ -73,6 +73,7 @@ function App() {
   const [scenarioId, setScenarioId] = useState('');
   const [result, setResult] = useState(null);
   const [comparison, setComparison] = useState(null);
+  const [experiment, setExperiment] = useState(null);
   const [message, setMessage] = useState('');
   const [dialog, setDialog] = useState(false);
   const [library, setLibrary] = useState(() => {
@@ -108,7 +109,7 @@ function App() {
     [downRegions, deployCheck, docs.build, analysis, simDeploy]
   );
   const simOk = !!simCheck?.valid;
-  const toggleOffline = (id) => { setOffline((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); setPlayback(null); setTrace(null); setResult(null); setComparison(null); };
+  const toggleOffline = (id) => { setOffline((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); setPlayback(null); setTrace(null); setResult(null); setComparison(null); setExperiment(null); };
   const activeExample = SYSTEM_EXAMPLES.find((item) => item.build.id === docs.build.id);
 
   useEffect(() => {
@@ -122,7 +123,7 @@ function App() {
 
   useEffect(() => {
     setResult(null);
-    setComparison(null);
+    setComparison(null); setExperiment(null);
     setPlayback(null);
     setTrace(null);
     setStepSession(null);
@@ -145,7 +146,7 @@ function App() {
     setFuture([]);
     setDocs((current) => update(duplicate(current)) || current);
     setResult(null);
-    setComparison(null);
+    setComparison(null); setExperiment(null);
   }, [docs]);
 
   const undo = () => {
@@ -217,7 +218,7 @@ function App() {
   const selectScenario = (id) => {
     setScenarioId(id);
     setResult(null);
-    setComparison(null);
+    setComparison(null); setExperiment(null);
     setPlayback(null);
     setTrace(null);
   };
@@ -237,7 +238,7 @@ function App() {
     const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
     if (!scenario || !simOk) return;
     setResult(evaluateScenario(scenario, simDeploy, stress));
-    setComparison(null);
+    setComparison(null); setExperiment(null);
   };
 
   const compareDeploys = () => {
@@ -255,6 +256,7 @@ function App() {
     const currentResult = evaluateScenario(scenario, deploy);
     const otherResult = evaluateScenario(scenario, other);
     setResult(currentResult);
+    setExperiment(null);
     setComparison({
       scenarioName: scenario.name,
       goalMs: scenario.goalMs,
@@ -276,11 +278,32 @@ function App() {
     setScenarioId(build.scenarios[0]?.id || '');
     setSelection(null);
     setResult(null);
-    setComparison(null);
+    setComparison(null); setExperiment(null);
     setPlayback(null);
     setTrace(null);
     setTipIndex(0);
     setMode(target);
+  };
+
+  // Experiments: break or change one thing on a copy of the design, then compare or watch it happen.
+  const runExperiment = (optionId, play) => {
+    const scenario = docs.build.scenarios.find((item) => item.id === scenarioId);
+    if (!scenario || !simOk || E.scenarioMode(analysis, scenario) !== 'rate') return;
+    const option = E.faultOptions(docs.build, simDeploy).find((item) => item.id === optionId);
+    if (!option) return;
+    const applied = E.applyFault(docs.build, analysis, simDeploy, scenario, option.fault);
+    if (!applied) { setMessage('This design has deployment issues, so the experiment cannot run.'); return; }
+    const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
+    if (play) {
+      setPlayback({ timeline: E.simulateTimeline(model, scenario, { frames: 48, N: 200, fault: { at: 0.5, M: applied.M, scale: applied.scale, label: `Experiment: ${option.label.charAt(0).toLowerCase()}${option.label.slice(1)}`, notes: applied.notes } }), index: 0, speed: 1, playing: true, experiment: option.label });
+      setTrace(null);
+      return;
+    }
+    const before = E.evaluateRate(model, scenario, { N: 1500, seed: 11 });
+    const after = E.evaluateRate(applied.M, applied.sc, { N: 1500, seed: 11 });
+    setComparison(null);
+    setResult(before);
+    setExperiment({ label: option.label, notes: applied.notes, before, after, goalMs: scenario.goalMs, summary: E.compareExperiment(scenario, before, after), beforeVerdict: E.rateVerdict(scenario, before), afterVerdict: E.rateVerdict(applied.sc, after) });
   };
 
   const startPlayback = () => {
@@ -563,6 +586,9 @@ function App() {
           activeExample={activeExample}
           comparison={comparison}
           compareDeploys={compareDeploys}
+          experiment={experiment}
+          setExperiment={setExperiment}
+          runExperiment={runExperiment}
           updateScenario={updateScenario}
           startNewScenario={startNewScenario}
           duplicateScenario={duplicateScenario}
@@ -1173,7 +1199,7 @@ function TryThis({ example, tips, index, setIndex, mode, goTo, onHide }) {
 
 function SimulateMode({
   build, analysis, deploy, check, offline = [], toggleOffline, updateDeploy, scenarioId, setScenarioId, result, runScenario,
-  activeExample, comparison, compareDeploys,
+  activeExample, comparison, compareDeploys, experiment, setExperiment, runExperiment,
   updateScenario, startNewScenario, duplicateScenario, deleteScenario, startPlayback,
   playback, setPlayback, trace, setTrace, startTrace, openTarget
 }) {
@@ -1246,6 +1272,7 @@ function SimulateMode({
         </div>}
         {scenario && mode === 'rate' && <section className="scenario-subsection"><h3>Where requests come from</h3><div className="scenario-editor origin-editor">{Object.entries(E.POPS).map(([key, pop]) => <label className="field-label" key={key}>{pop.label} (%)<input type="number" min="0" max="100" value={scenario.origins?.[key] || 0} onChange={(event) => updateScenario(scenario.id, (item) => { item.origins = { ...(item.origins || {}), [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }; })} /></label>)}</div></section>}
         {conditions.length > 0 && <section className="scenario-subsection"><h3>Branch choices</h3><p className="helper-text">Override the chance that each condition is true for this scenario.</p>{conditions.map((condition) => <label className="odds-control" key={condition.key}><span>{condition.w}.{condition.h}: {condition.cond}</span><input type="range" min="0" max="100" step="1" value={Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { item.odds = { ...(item.odds || {}), [condition.key]: Number(event.target.value) / 100 }; })} /><strong>{Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)}%</strong><button className="text-button" type="button" onClick={() => updateScenario(scenario.id, (item) => { delete item.odds?.[condition.key]; })}>Reset</button></label>)}</section>}
+        {scenario && mode === 'rate' && check?.valid && <ExperimentPicker build={build} deploy={deploy} runExperiment={runExperiment} />}
         <section className="scenario-subsection live-tweaks" aria-label="Playground controls">
           <h3>Playground</h3>
           <p className="helper-text">Change anything here and the picture updates right away. Regions can go offline to see what survives.</p>
@@ -1271,12 +1298,13 @@ function SimulateMode({
       <div className="canvas-column sim-main">
         {check?.valid ? <SimulateCanvas build={build} analysis={analysis} deploy={deploy} result={result} playback={playback} trace={trace} offline={offline} onToggleOffline={toggleOffline} /> : <div className="simulation-empty"><span className="simulation-symbol">!</span><strong>Fix your Deploy first</strong><span>Open Deploy and apply the fixes it suggests, then come back to run a scenario.</span></div>}
       {comparison && <ComparisonPanel comparison={comparison} />}
+      {experiment && <ExperimentPanel experiment={experiment} onClose={() => setExperiment(null)} />}
       {playback && frame && <section className="playback-panel">
-        <div className="card-heading"><div><p className="eyebrow">Scenario playback</p><h2>{Math.round(frame.t / 60)} min · {Math.round(frame.lam)} req/s</h2></div><button type="button" className="text-button" onClick={() => setPlayback(null)}>Close</button></div>
-        <div className="playback-controls"><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: !state.playing }))}>{playback.playing ? 'Pause' : 'Play'}</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.max(0, state.index - 1) }))}>Back</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.min(state.timeline.frames.length - 1, state.index + 1) }))}>Step</button><label>Speed<select value={playback.speed} onChange={(event) => setPlayback((state) => ({ ...state, speed: Number(event.target.value) }))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><span>p50 {Math.round(frame.p50)} ms · p99 {Math.round(frame.p99)} ms · {(frame.err * 100).toFixed(2)}% errors</span></div>
+        <div className="card-heading"><div><p className="eyebrow">Scenario playback</p><h2>{Math.round(frame.t / 60)} min · {Math.round(frame.lam)} req/s</h2>{playback.experiment && <small className={`fault-flag ${frame.broken ? 'on' : ''}`}>{frame.broken ? `Now: ${playback.experiment.charAt(0).toLowerCase()}${playback.experiment.slice(1)}` : `Halfway: ${playback.experiment.charAt(0).toLowerCase()}${playback.experiment.slice(1)}`}</small>}</div><button type="button" className="text-button" onClick={() => setPlayback(null)}>Close</button></div>
+        <div className="playback-controls"><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: !state.playing }))}>{playback.playing ? 'Pause' : 'Play'}</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.max(0, state.index - 1) }))}>Back</button><button className="button quiet" type="button" onClick={() => setPlayback((state) => ({ ...state, playing: false, index: Math.min(state.timeline.frames.length - 1, state.index + 1) }))}>Step</button><label>Speed<select value={playback.speed} onChange={(event) => setPlayback((state) => ({ ...state, speed: Number(event.target.value) }))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><span>{frame.err >= 0.999 ? 'Every request fails' : `p50 ${Math.round(frame.p50)} ms · p99 ${Math.round(frame.p99)} ms`} · {(frame.err * 100).toFixed(2)}% errors</span></div>
         <input aria-label="Playback position" className="playback-seek" type="range" min="0" max={playback.timeline.frames.length - 1} value={playback.index} onChange={(event) => setPlayback((state) => ({ ...state, playing: false, index: Number(event.target.value) }))} />
-        <div className="playback-resources">{Object.entries(frame.res).map(([key, resource]) => <div key={key}><span>{resource.label}</span><strong>{Math.round(resource.rho * 100)}% busy</strong><small>{resource.inst ? `${resource.inst} instances` : resource.what || ''}</small><i><b style={{ width: `${Math.min(100, resource.rho * 100)}%` }} /></i></div>)}</div>
-        <div className="playback-events">{playback.timeline.events.filter((event) => event.i <= playback.index).slice(-5).map((event, index) => <p key={`${event.i}-${index}`}>{event.msg}</p>)}</div>
+        <div className="playback-resources">{Object.entries(frame.res).map(([key, resource]) => <div key={key}><span>{resource.label}</span><strong className={resource.down ? 'bad-text' : ''}>{resource.down ? 'Down' : `${Math.round(resource.rho * 100)}% busy`}</strong><small>{resource.down ? 'part of the experiment' : resource.inst ? `${resource.inst} instances` : resource.what || ''}</small><i><b style={{ width: `${Math.min(100, resource.rho * 100)}%` }} /></i></div>)}</div>
+        <div className="playback-events">{playback.timeline.events.filter((event) => event.i <= playback.index).slice(playback.experiment && frame.broken ? -8 : -5).map((event, index) => <p key={`${event.i}-${index}`} className={event.fault ? 'fault-event' : ''}>{event.msg}</p>)}</div>
       </section>}
       {trace && traceStep && <section className="playback-panel trace-panel">
         <div className="card-heading"><div><p className="eyebrow">Single-request trace</p><h2>{trace.label}</h2></div><button type="button" className="text-button" onClick={() => setTrace(null)}>Close</button></div>
@@ -1334,6 +1362,50 @@ function SimulateMode({
         <div className="simulation-empty"><span className="simulation-symbol">◷</span><strong>Run a scenario to see the bottleneck</strong><span>Results are deterministic for the same design and seed, and every value is an approximate learning estimate.</span></div>
       )}
       </aside>
+    </section>
+  );
+}
+
+function ExperimentPicker({ build, deploy, runExperiment }) {
+  const options = useMemo(() => E.faultOptions(build, deploy), [build, deploy]);
+  const [choice, setChoice] = useState('');
+  const picked = options.find((item) => item.id === choice) || options[0];
+  if (!picked) return null;
+  return (
+    <section className="scenario-subsection experiments" aria-label="Experiments">
+      <h3>Experiments</h3>
+      <p className="helper-text">Break or change one thing on a copy of this design. Compare before and after, or watch it happen halfway through the scenario.</p>
+      <label className="field-label">What happens if…<select aria-label="Experiment" value={picked.id} onChange={(event) => setChoice(event.target.value)}>{options.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      <div className="scenario-actions"><button type="button" className="button primary" onClick={() => runExperiment(picked.id, false)}>Compare before and after</button><button type="button" className="button quiet" onClick={() => runExperiment(picked.id, true)}>Play it</button></div>
+    </section>
+  );
+}
+
+function ExperimentPanel({ experiment, onClose }) {
+  const { before, after } = experiment;
+  const ms = (r, v) => r.ok ? `${Math.round(v)} ms` : '—';
+  const rows = [
+    { label: 'p50 latency', term: 'p50', a: ms(before, before.p50), b: ms(after, after.p50) },
+    { label: 'p99 latency', term: 'p99', a: ms(before, before.p99), b: ms(after, after.p99) },
+    { label: 'System failures', term: 'failures', a: `${(before.sysErr * 100).toFixed(2)}%`, b: `${(after.sysErr * 100).toFixed(2)}%`, worse: after.sysErr > Math.max(0.01, before.sysErr * 1.5) },
+    { label: 'Estimated cost', term: 'cost', a: `$${before.cost.toFixed(2)}/h`, b: `$${after.cost.toFixed(2)}/h` }
+  ];
+  const tag = (v) => v.status === 'pass' ? 'Meets goal' : v.status === 'slow' ? 'Misses goal' : 'Failing';
+  return (
+    <section className="explanation-card comparison-card experiment-card" aria-label="Experiment result">
+      <div className="card-heading"><div><p className="eyebrow">Experiment · {experiment.label}</p><h2>{experiment.summary}</h2></div><button type="button" className="text-button" onClick={onClose}>Close</button></div>
+      <div className="comparison-table-wrap">
+        <table className="comparison-table">
+          <thead><tr><th scope="col">Measure</th><th scope="col">Before</th><th scope="col">After</th></tr></thead>
+          <tbody>
+            {rows.map((row) => <tr key={row.label}><th scope="row"><Term k={row.term}>{row.label}</Term></th><td>{row.a}</td><td className={row.worse ? 'bad-text' : ''}>{row.b}</td></tr>)}
+            <tr><th scope="row">Goal</th><td><span className={`pill ${experiment.beforeVerdict.status === 'pass' ? 'success' : 'danger'}`}>{tag(experiment.beforeVerdict)}</span></td><td><span className={`pill ${experiment.afterVerdict.status === 'pass' ? 'success' : 'danger'}`}>{tag(experiment.afterVerdict)}</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="eyebrow">What happened</p>
+      <ul className="experiment-notes">{experiment.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+      <small>Your Deploy is unchanged. The results panel shows the design before the experiment.</small>
     </section>
   );
 }

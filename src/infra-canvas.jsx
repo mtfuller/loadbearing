@@ -44,12 +44,14 @@ function nodeDetail(gnode, resource, deploy) {
     const T = E.COMPUTE[resource.type];
     const size = T.sizes ? `${resource.size} · ` : '';
     const scale = resource.type === 'fn' ? `up to ${resource.concurrency || 1000} at once` : `${resource.min ?? 0}–${resource.max ?? 1} instances`;
-    return `${T.short} · ${size}${scale}`;
+    const zones = E.zonesEditable(resource, false) ? ` · ${E.zonesOf(resource, false)} ${E.zonesOf(resource, false) === 1 ? 'zone' : 'zones'}` : '';
+    return `${T.short} · ${size}${scale}${zones}`;
   }
   if (gnode.kind === 'store' && resource) {
     const T = E.STORES[resource.type];
     const copies = resource.regions.length > 1 ? ` · ${E.REPL[resource.repl].short}` : '';
-    return `${T.label}${T.usd ? ` · ${resource.size || 'Medium'}` : ''}${copies}`;
+    const zones = E.zonesEditable(resource, true) ? ` · ${E.zonesOf(resource, true)} ${E.zonesOf(resource, true) === 1 ? 'zone' : 'zones'}` : '';
+    return `${T.label}${T.usd ? ` · ${resource.size || 'Medium'}` : ''}${copies}${zones}`;
   }
   if (gnode.kind === 'entry') {
     const net = E.netRegion(deploy, gnode.region);
@@ -120,7 +122,8 @@ function InfraNode({ data, selected }) {
         ))}
       </div>}
       {hint && <div className={`drop-hint ${hint.ok ? 'ok' : 'no'}`}>{hint.ok ? '✓' : '✕'} {hint.text}</div>}
-      {state && !hint && <div className={`heat-readout heat-${level}`}>
+      {state && !hint && state.down && <div className="heat-readout heat-over"><div className="heat-line"><strong>Down</strong><span>Experiment</span></div></div>}
+      {state && !hint && !state.down && <div className={`heat-readout heat-${level}`}>
         <div className="heat-line"><strong>{Math.round(state.rho * 100)}% {state.what || 'busy'}</strong><span>{HEAT_WORDS[level]}</span></div>
         <i><b style={{ width: `${Math.min(100, state.rho * 100)}%` }} /></i>
         {state.inst != null && state.type === 'compute' && <small>{state.inst} {state.inst === 1 ? 'instance' : 'instances'}{state.lag ? ` · ${state.lag} still starting` : ''}</small>}

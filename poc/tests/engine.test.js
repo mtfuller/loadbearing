@@ -183,4 +183,43 @@ test('auto layout never overlaps and is deterministic on every example', () => {
   }); }); return bad; })()`);
   assert.strictEqual(JSON.stringify(r), '[]');
 });
+
+// ---------- experiments: break one thing and compare ----------
+E(`var xp = (deployIndex, fault, edit) => { const d = JSON.parse(JSON.stringify(deps[deployIndex])); normalizeDeploy(d); if (edit) edit(d); const sc = B.scenarios[0]; const V = validateDeploy(B, A, d); const m = compileModel(B, A, d, V); const before = evaluateRate(m, sc, { N: 600, seed: 11 }); const f = applyFault(B, A, d, sc, fault); const after = evaluateRate(f.M, f.sc, { N: 600, seed: 11 }); return { d, before, after, f, sc }; }`);
+test('experiments list traffic, region, zone and slow-down options for a Deploy', () => {
+  const ids = E(`faultOptions(B, deps[1]).map(o => o.id)`);
+  for (const id of ['traffic', 'region:use1', 'zone:euw1']) assert.ok(ids.includes(id), id);
+  assert.ok(ids.some(id => id.startsWith('slow:s:')));
+});
+test('losing a region: single-region stores go down, replicated ones fail over, the Deploy is untouched', () => {
+  const r = E(`(() => { const x = xp(1, { kind: 'region', region: 'use1' }); return { notes: x.f.notes, err: x.after.sysErr, why: Object.keys(x.after.why), regions: x.d.regions, beforeErr: x.before.sysErr }; })()`);
+  assert.ok(r.notes.some(n => /payments-db lives only in us-east-1/.test(n)), r.notes.join(' | '));
+  assert.ok(r.notes.some(n => /edge-cluster .*moves to/.test(n)));
+  assert.ok(r.err > r.beforeErr, 'more failures after');
+  assert.ok(r.why.some(w => /payments-(db|cluster) is (unavailable|down)/.test(w)), r.why.join(','));
+  assert.strictEqual(JSON.stringify(r.regions), JSON.stringify(['use1', 'euw1', 'apse1']), 'original Deploy unchanged');
+});
+test('losing a zone: one-zone database fails, a standby in a second zone survives at higher cost', () => {
+  const one = E(`(() => { const x = xp(0, { kind: 'zone', region: 'use1' }); return { err: x.after.sysErr, notes: x.f.notes }; })()`);
+  assert.ok(one.err > 0.5, 'main-db in one zone takes requests down: ' + one.err);
+  assert.ok(one.notes.some(n => /app-cluster loses 1 of its 3 zones/.test(n)), one.notes.join(' | '));
+  const two = E(`(() => { const x = xp(0, { kind: 'zone', region: 'use1' }, d => d.stores.forEach(s => { if (zonesEditable(s, true)) s.zones = 2; })); return { err: x.after.sysErr, cost: x.before.cost, notes: x.f.notes }; })()`);
+  const base = E(`xp(0, { kind: 'traffic', factor: 1 }).before.cost`);
+  assert.ok(two.err < 0.01, 'survives with standbys: ' + two.err);
+  assert.ok(two.cost > base, 'standbys cost more');
+  assert.ok(two.notes.some(n => /fails over to its standby/.test(n)));
+});
+test('slowing a store raises latency and doubling traffic raises the rate', () => {
+  const slow = E(`(() => { const d = deps[0]; const x = xp(0, { kind: 'slow', store: d.stores[0].id, ms: 100 }); return [x.before.p50, x.after.p50]; })()`);
+  assert.ok(slow[1] > slow[0] + 50, JSON.stringify(slow));
+  const t = E(`(() => { const x = xp(0, { kind: 'traffic', factor: 2 }); return [x.before.lambda, x.after.lambda]; })()`);
+  assert.ok(Math.abs(t[1] / t[0] - 2) < 1e-6);
+  assert.ok(/does not survive|survives|rides through|goal|fail/.test(E(`(() => { const x = xp(1, { kind: 'region', region: 'use1' }); return compareExperiment(x.sc, x.before, x.after); })()`)));
+});
+test('playback can break the design halfway and says what happened', () => {
+  const r = E(`(() => { const d = JSON.parse(JSON.stringify(deps[1])); normalizeDeploy(d); const sc = B.scenarios[0]; const V = validateDeploy(B, A, d); const m = compileModel(B, A, d, V); const f = applyFault(B, A, d, sc, { kind: 'region', region: 'use1' }); const tl = simulateTimeline(m, sc, { frames: 10, N: 80, fault: { at: 0.5, M: f.M, label: 'us-east-1 goes down', notes: f.notes } }); return { broken: tl.frames.map(x => x.broken), ev: tl.events.filter(e => e.fault).map(e => e.msg), early: tl.frames[2].err, late: tl.frames[8].err }; })()`);
+  assert.strictEqual(JSON.stringify(r.broken), JSON.stringify([false, false, false, false, false, true, true, true, true, true]));
+  assert.strictEqual(r.ev[0], 'us-east-1 goes down');
+  assert.ok(r.late > r.early);
+});
 console.log(`\n${n} passed${process.exitCode ? ', some failed' : ''}`);

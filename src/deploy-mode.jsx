@@ -295,6 +295,16 @@ function GlobalInspector({ deploy, updateDeploy }) {
   );
 }
 
+function ZonesField({ item, isStore, update }) {
+  if (!E.zonesEditable(item, isStore)) return E.zonesOf(item, isStore) ? <p className="helper-text">Zones: {E.zonesOf(item, isStore)}. {GLOSSARY.zonesManaged}</p> : <p className="helper-text">{GLOSSARY.zonesManaged}</p>;
+  return (
+    <>
+      <label className="field-label">Availability zones per region<select value={E.zonesOf(item, isStore)} onChange={(event) => update('zones', Number(event.target.value))}>{[1, 2, 3].map((count) => <option key={count} value={count}>{count === 1 ? '1 zone' : `${count} zones`}</option>)}</select></label>
+      <p className="helper-text">{isStore ? GLOSSARY.zonesStore : GLOSSARY.zonesCompute}</p>
+    </>
+  );
+}
+
 function ComputeInspector({ build, deploy, compute, updateDeploy, header }) {
   if (!compute) return null;
   const update = (prop, value) => updateDeploy((doc) => { const item = doc.compute.find((candidate) => candidate.id === compute.id); if (item) item[prop] = value; });
@@ -320,6 +330,7 @@ function ComputeInspector({ build, deploy, compute, updateDeploy, header }) {
       {compute.type !== 'fn' && <div className="deploy-global-grid"><label className="field-label">Minimum instances<input type="number" min="0" value={compute.min ?? 0} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.min = Math.max(0, Number(event.target.value) || 0); if (item.max < item.min) item.max = item.min; })} /></label><label className="field-label">Maximum instances<input type="number" min="1" value={compute.max ?? 1} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.max = Math.max(item.min || 0, Number(event.target.value) || 1); })} /></label></div>}
       {compute.type !== 'fn' && <p className="helper-text">{GLOSSARY.minMax}</p>}
       {compute.type === 'fn' && <p className="helper-text">{GLOSSARY.concurrency}</p>}
+      <ZonesField item={compute} isStore={false} update={update} />
       {compute.type === 'fn' && <label className="field-label">Concurrency<input type="number" min="1" value={compute.concurrency || 1000} onChange={(event) => update('concurrency', Math.max(1, Number(event.target.value) || 1))} /></label>}
       {compute.type === 'fn' && <label className="field-label">Memory (MB)<input type="number" min="128" step="128" value={compute.memory || 1024} onChange={(event) => update('memory', Math.max(128, Number(event.target.value) || 128))} /></label>}
       <label className="toggle-field"><input type="checkbox" checked={!!compute.vpc} onChange={(event) => update('vpc', event.target.checked)} />Private network access</label>
@@ -353,6 +364,7 @@ function StoreInspector({ build, deploy, store, updateDeploy, header }) {
       <label className="field-label">Store type<select value={store.type} onChange={(event) => changeType(event.target.value)}>{Object.entries(E.STORES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
       {T.note && <p className="helper-text">{T.note}</p>}
       {T.usd && <label className="field-label">Size<select value={store.size || 'Medium'} onChange={(event) => update('size', event.target.value)}>{Object.keys(T.usd).map((size) => <option key={size}>{size}</option>)}</select></label>}
+      <ZonesField item={store} isStore update={update} />
       <label className="field-label">Copies across regions<select value={store.repl} onChange={(event) => update('repl', event.target.value)}>{T.repl.map((value) => <option key={value} value={value}>{E.REPL[value].label}</option>)}</select></label>
       {REPL_NOTES[store.repl] && <p className="helper-text">{REPL_NOTES[store.repl]}</p>}
       <label className="field-label">Read from<select value={store.readFrom || 'nearest'} onChange={(event) => update('readFrom', event.target.value)}><option value="nearest">Nearest copy</option><option value="primary">Primary only</option></select></label>
