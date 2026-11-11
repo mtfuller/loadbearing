@@ -9,7 +9,8 @@ export const EXAMPLE_META = {
       { mode: 'simulate', text: 'Look at the Redirect rush result: links-db is overloaded and the click consumer falls hours behind.' },
       { mode: 'deploy', text: 'Select links-db and set Shards to 4, then go back to Simulate. Failures should drop sharply.' },
       { mode: 'simulate', text: 'Press Compare designs to see the scaled multi-region design run the same traffic, and what it costs.' },
-      { mode: 'simulate', text: 'Move most traffic to East & Southeast Asia under "Where requests come from". p99 climbs from distance alone.' }
+      { mode: 'simulate', text: 'Move most traffic to East & Southeast Asia under "Where requests come from". p99 climbs from distance alone.' },
+      { mode: 'simulate', text: 'Under Experiments, pick "Lose one zone in us-east-1" and compare. Then give links-db 2 zones in Deploy and try again.' }
     ]
   },
   'social-network': {
@@ -29,7 +30,7 @@ export const EXAMPLE_META = {
       { mode: 'simulate', text: 'Run Friday night viewing and see what fills first when everyone browses at once.' },
       { mode: 'simulate', text: 'Switch the scenario to New release transcode to see how long the batch job takes and what limits it.' },
       { mode: 'build', text: 'Open Transcoder and raise parallel 10 to parallel 50. Run the transcode again.' },
-      { mode: 'simulate', text: 'Press Compare designs, then take a region offline in the playground to see what survives.' }
+      { mode: 'simulate', text: 'Under Experiments, pick "Lose us-east-1" and press Play it to watch the outage hit halfway through.' }
     ]
   },
   'search-engine': {
@@ -59,7 +60,8 @@ export const EXAMPLE_META = {
       { mode: 'build', text: 'Pick Checkout under "Step through an entry point" and step through it. Answer the branch questions yourself.' },
       { mode: 'simulate', text: 'Run Checkout rush and read what to try next.' },
       { mode: 'simulate', text: 'Switch to Product feed import to see a batch job\'s finish time and limiting factor.' },
-      { mode: 'simulate', text: 'Press Compare designs to run the same rush on the global, multi-region design.' }
+      { mode: 'simulate', text: 'Press Compare designs to run the same rush on the global, multi-region design.' },
+      { mode: 'simulate', text: 'Under Experiments, slow down PaymentGateway and compare. Every checkout waits for it.' }
     ]
   }
 };
@@ -79,6 +81,9 @@ export const GLOSSARY = {
   loadShape: 'Steady keeps the rate flat. Peak burst triples it at the busiest moment. Ramp grows past capacity to find the breaking point.',
   minMax: 'Autoscaling keeps at least the minimum instances running and never goes past the maximum. Scaling up takes time, so sudden spikes hit before new instances are ready.',
   concurrency: 'How many requests functions can handle at the same moment in this region. Past this, requests are throttled.',
+  zonesCompute: 'Zones are separate data centers inside a region. Spreading machines across zones means losing one zone takes away only part of the capacity.',
+  zonesStore: 'One zone is cheapest, but losing that zone takes the database down. Two or more zones keep a standby that takes over, for about twice the cost.',
+  zonesManaged: 'The provider spreads this across zones for you, so losing one zone does not stop it.',
   goal: 'The p99 latency you want. Runs that fail more than 1% of requests miss the goal even if they are fast.'
 };
 

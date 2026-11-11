@@ -55,6 +55,15 @@ const NET = {
   link: { peering: { label: 'Network peering', ms: 0, usd: 0.01, note: 'Direct links between each pair of region networks.' }, transit: { label: 'Transit hub', ms: 1, usd: 0.02, note: 'All regions join one hub. Easier to manage; adds about 1 ms per hop.' } },
   steering: { nearest: { label: 'Nearest region', note: 'DNS sends each user to the closest region that runs the entry workload.' }, primary: { label: 'One region only', note: 'Every user goes to the first region, wherever they are. Other regions only serve internal work.' } }
 };
+// Availability zones: separate data centers inside one region. Managed regional services
+// (functions, scale-to-zero containers, key-value, queues, pub/sub, object storage) spread across
+// zones for you; that is 0 here. Self-run clusters and databases use as many zones as you choose.
+// Defaults: EKS/GKE node groups usually span 3 zones; a VM group or a database starts in one.
+const ZONE_DEFAULTS = { compute: { k8s: 3, vm: 1 }, store: { postgres: 1, doc: 1, redis: 1, kafka: 3, distsql: 3 } };
+// A standby copy in a second zone roughly doubles a database's instance cost (as with RDS Multi-AZ).
+const ZONE_STANDBY_COST = 2;
+function zonesOf(x, isStore) { const d = ZONE_DEFAULTS[isStore ? 'store' : 'compute'][x.type]; if (d == null) return 0; return Math.max(1, Math.min(3, x.zones || d)); }
+function zonesEditable(x, isStore) { return isStore ? ['postgres', 'doc', 'redis'].includes(x.type) : ['k8s', 'vm'].includes(x.type); }
 function netRegion(Dp, r) { const n = Dp.network || {}; return (n.regions && n.regions[r]) || { entry: 'lb', limit: 10000, nat: true, endpoints: false }; }
 function normalizeDeploy(Dp) {
   if (!Dp) return Dp;
@@ -391,4 +400,4 @@ function removeRegion(Dp, region) {
   Dp.stores.forEach(s => { s.regions = s.regions.filter(r => r !== region); if (!s.regions.includes(s.primary)) s.primary = s.regions[0] || Dp.regions[0]; });
   if (Dp.layout) Object.keys(Dp.layout).forEach(k => { if (k.endsWith('@' + region) || k === 'r:' + region || k === 'e:' + region || k === 'n:' + region || k === 'p:' + region) delete Dp.layout[k]; });
 }
-if (typeof module !== 'undefined') module.exports = { deployGraph, trafficFor, heatFor, heatLevel, placeWorkloadOn, placeDataIn, moveToRegion, addInRegion, removeRegion, GRAPH, NET, storeFit, normalizeDeploy, netRegion, partitionKeyOf, shardCount, REGIONS, POPS, COMPUTE, STORES, REPL, rtt, popRtt, nearestRegion, nearestForPop, storeTarget, quorumRtt, validateDeploy, autoPlace, newCompute, newStore, uid, canUseVpc };
+if (typeof module !== 'undefined') module.exports = { zonesOf, zonesEditable, ZONE_STANDBY_COST, deployGraph, trafficFor, heatFor, heatLevel, placeWorkloadOn, placeDataIn, moveToRegion, addInRegion, removeRegion, GRAPH, NET, storeFit, normalizeDeploy, netRegion, partitionKeyOf, shardCount, REGIONS, POPS, COMPUTE, STORES, REPL, rtt, popRtt, nearestRegion, nearestForPop, storeTarget, quorumRtt, validateDeploy, autoPlace, newCompute, newStore, uid, canUseVpc };

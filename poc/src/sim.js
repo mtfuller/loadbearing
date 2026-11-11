@@ -120,8 +120,10 @@ function resourceStates(M, acc) {
       if (C.type === 'fn') { const lim = C.concurrency || 1000; R[k] = Object.assign({}, o, { rho: o.conc / lim, inst: Math.ceil(o.conc), cap: lim, label: `${C.name} (${REGIONS[o.region].code})`, what: 'concurrency' }); }
       else {
         const cores = T.sizes[C.size] || 2; const need = Math.ceil(o.cpu / (cores * 1000 * 0.6));
-        const inst = clampN(need, C.min || 0, C.max || 1); const rho = inst ? o.cpu / (inst * cores * 1000) : (o.cpu > 0 ? 9 : 0);
-        R[k] = Object.assign({}, o, { rho, inst, need, cores, cap: (C.max || 1) * cores * 1000, label: `${C.name} (${REGIONS[o.region].code})`, what: 'CPU' });
+        // An experiment that loses a zone leaves this share of the machines in that region.
+        const keep = (C.keep && C.keep[o.region]) || 1; const maxI = Math.max(1, Math.floor((C.max || 1) * keep));
+        const inst = clampN(need, Math.min(C.min || 0, maxI), maxI); const rho = inst ? o.cpu / (inst * cores * 1000) : (o.cpu > 0 ? 9 : 0);
+        R[k] = Object.assign({}, o, { rho, inst, need, cores, keep, cap: maxI * cores * 1000, label: `${C.name} (${REGIONS[o.region].code})`, what: 'CPU' });
       }
     } else if (o.type === 'store') {
       const S = o.ref, T = STORES[S.type]; let rho = 0, what = 'capacity';
@@ -139,6 +141,8 @@ function resourceStates(M, acc) {
     users.forEach(u => { if (!u) return; const st = R['c:' + u]; if (!st) return; const C = st.ref; want += C.type === 'fn' ? st.inst : st.inst * (COMPUTE[C.type].pool || 10); });
     R['conn:' + sid] = { type: 'conn', ref: S, rho: want / lim, want, cap: lim, label: `${S.name} connections`, what: 'connections', region: S.primary };
   });
+  // Resources an experiment took down do no work; requests that reach them fail in the tracer.
+  Object.values(R).forEach(st => { if (st.ref && st.ref.down && (st.type === 'compute' || st.type === 'store' || st.type === 'conn')) Object.assign(st, { rho: 0, down: true, what: 'down' }); });
   return R;
 }
 
@@ -185,7 +189,7 @@ function evaluateRate(M, sc, opt) {
   const cAdd = (k, v) => { cost += v; costBy[k] = (costBy[k] || 0) + v; };
   Object.values(R).forEach(s => {
     if (s.type === 'compute') { const C = s.ref; if (C.type === 'fn') cAdd('Compute', lam ? s.conc * 3600 * 0.0000166667 * (C.memory || 1024) / 1024 + s.cpu / 1 * 0 : 0); else cAdd('Compute', s.inst * s.cores * COMPUTE[C.type].usd); }
-    if (s.type === 'store') { const S = s.ref, T = STORES[S.type]; if (T.usd) cAdd('Databases and storage', (T.usd[S.size] || 1) * (s.region === S.primary || S.repl === 'single' ? 1 : 0.6)); if (T.perM) cAdd('Databases and storage', (s.ops + s.pub) * 3600 / 1e6 * T.perM[1]); }
+    if (s.type === 'store') { const S = s.ref, T = STORES[S.type]; if (T.usd) cAdd('Databases and storage', (T.usd[S.size] || 1) * (s.region === S.primary || S.repl === 'single' ? 1 : 0.6) * (zonesEditable(S, true) && zonesOf(S, true) > 1 ? ZONE_STANDBY_COST : 1)); if (T.perM) cAdd('Databases and storage', (s.ops + s.pub) * 3600 / 1e6 * T.perM[1]); }
   });
   Object.values(R).forEach(s => { if (s.type === 'nat') cAdd('Network', NET.nat.usd + s.rps * 3600 * 4 / 1e6 * 0.045); if (s.type === 'gateway') cAdd('Network', s.rps * 3600 / 1e6 * 1.0); });
   Object.values(acc.flows).forEach(v => cAdd('Traffic between regions', v * 3600 * 4 / 1e6 * 0.02));
@@ -219,7 +223,8 @@ function runTracer(M, plan, R, rng, o, keepSpans) {
     if (g.kind === 'net') lat = g.hop < 0.2 ? g.hop : (big ? g.hop * 1.03 : logn(rng, g.hop, g.hop * 1.15 + 0.6));
     else if (g.kind === 'cpu') {
       const st = g.comp && R['c:' + g.comp.id + '@' + g.region];
-      if (!st) { lat = g.cpu; }
+      if (g.comp && g.comp.down) { sys = sys || g.comp.down; }
+      else if (!st) { lat = g.cpu; }
       else {
         const rho = Math.min(st.rho, 0.97); const cc = Math.max(1, (st.inst || 1) * (st.cores || 1));
         const wait = g.cpu * Math.pow(rho, Math.sqrt(2 * (cc + 1)) - 1) / (cc * (1 - rho));
@@ -232,11 +237,12 @@ function runTracer(M, plan, R, rng, o, keepSpans) {
       const T = STORES[g.store.type]; const st = R['s:' + g.store.id + '@' + g.target]; const rho = st ? Math.min(st.rho, 0.97) : 0;
       const um = (1 + rho * rho * rho / (1 - rho) * 0.5) * (g.fan > 1 ? 1 + 0.35 * Math.log2(g.fan) : 1); const prof = (g.op === 'read' ? T.read : T.write) || T.pub;
       const base = big ? lnMean(prof[0] * um, prof[1] * um) : logn(rng, prof[0] * um, prof[1] * um);
-      lat = g.hop + g.quorum + base + (g.rows > 1 ? g.rows * 0.01 : 0) + (g.scan ? g.rows / 40000 : 0);
+      lat = g.hop + g.quorum + base + (g.rows > 1 ? g.rows * 0.01 : 0) + (g.scan ? g.rows / 40000 : 0) + (g.store.slowMs || 0);
+      if (g.store.down) sys = sys || g.store.down;
       const cn = R['conn:' + g.store.id]; if (cn && cn.rho > 1 && rng.u() < 1 - 1 / cn.rho) { lat += logn(rng, 30, 400); if (lat > 3000) sys = sys || `${g.store.name} ran out of connections`; }
       if (st && st.rho > 0.97 && rng.u() < 1 - 0.97 / st.rho) sys = sys || `${g.store.name} is overloaded`;
-    } else if (g.kind === 'pub') { const T = STORES[g.store.type]; const pp = T.pub || T.write; const st = R['s:' + g.store.id + '@' + g.target]; lat = g.hop + logn(rng, pp[0], pp[1]); if (st && st.rho > 1 && rng.u() < 1 - 1 / st.rho) sys = sys || `${g.store.name} can’t take more events`; }
-    else if (g.kind === 'ext') lat = big ? lnMean(g.ms, g.ms * 2.5) : logn(rng, g.ms, g.ms * 2.5);
+    } else if (g.kind === 'pub') { const T = STORES[g.store.type]; const pp = T.pub || T.write; const st = R['s:' + g.store.id + '@' + g.target]; lat = g.hop + logn(rng, pp[0], pp[1]) + (g.store.slowMs || 0); if (g.store.down) sys = sys || g.store.down; if (st && st.rho > 1 && rng.u() < 1 - 1 / st.rho) sys = sys || `${g.store.name} can’t take more events`; }
+    else if (g.kind === 'ext') lat = (big ? lnMean(g.ms, g.ms * 2.5) : logn(rng, g.ms, g.ms * 2.5)) + ((M.slowExt && M.slowExt[g.w]) || 0);
     else if (g.kind === 'err') { biz = true; }
     if (g.nat) { const nt = R['n:' + g.nat]; if (nt && nt.rho > 1 && rng.u() < 1 - 1 / nt.rho) sys = sys || `NAT gateway in ${REGIONS[g.nat].code} ran out of connections`; }
     lat *= m;
@@ -257,7 +263,7 @@ function capacityLambda(M, sc) {
   const pathKeys = new Set(unit.pathRanked.map(([k]) => k));
   Object.entries(unit.R).filter(([k]) => !pathKeys.size || pathKeys.has(k)).map(([, s]) => s).forEach(s => {
     let capLam = Infinity;
-    if (s.type === 'compute') { const C = s.ref; if (C.type === 'fn') capLam = (C.concurrency || 1000) / Math.max(1e-9, s.conc); else capLam = ((C.max || 1) * s.cores * 1000 * 0.97) / Math.max(1e-9, s.cpu); }
+    if (s.type === 'compute') { const C = s.ref; if (C.type === 'fn') capLam = (C.concurrency || 1000) / Math.max(1e-9, s.conc); else capLam = (s.cap * 0.97) / Math.max(1e-9, s.cpu); }
     else if (s.type === 'nat') capLam = NET.nat.cap * 0.97 / Math.max(1e-9, s.rps);
     else if (s.type === 'gateway') capLam = s.limit / Math.max(1e-9, s.rps);
     else if (s.type === 'store') { const T = STORES[s.ref.type]; if (T.cap) capLam = (T.cap[s.ref.size] || 20000) * shardCount(s.ref) * 0.97 / Math.max(1e-9, s.ops); if (T.partitions && s.pub) capLam = Math.min(capLam, (s.ref.partitions || 12) * 1000 / s.pub); }
@@ -318,6 +324,68 @@ function suggestionsFor(M, sc, r) {
   return out;
 }
 
+/* ---------- experiments: change or break one thing, then compare ---------- */
+// Slow-dependency experiments add this much to every call (ms). Assumption: a sick dependency, not a dead one.
+const SLOW_STORE_MS = 100, SLOW_EXTERNAL_MS = 400;
+// The experiments that make sense for this Deploy. Each is plain data, so the UI can list and replay it.
+function faultOptions(B, Dp) {
+  const code = r => REGIONS[r].code; const out = [{ id: 'traffic', label: 'Double the traffic', fault: { kind: 'traffic', factor: 2 } }];
+  Dp.regions.forEach(r => out.push({ id: 'region:' + r, label: `Lose ${code(r)} (the whole region)`, fault: { kind: 'region', region: r } }));
+  Dp.regions.forEach(r => out.push({ id: 'zone:' + r, label: `Lose one zone in ${code(r)}`, fault: { kind: 'zone', region: r } }));
+  Dp.stores.forEach(S => out.push({ id: 'slow:s:' + S.id, label: `Slow down ${S.name} (+${SLOW_STORE_MS} ms)`, fault: { kind: 'slow', store: S.id, ms: SLOW_STORE_MS } }));
+  (B.workloads || []).filter(w => w.external).forEach(w => out.push({ id: 'slow:x:' + w.name, label: `Slow down ${w.name} (+${SLOW_EXTERNAL_MS} ms)`, fault: { kind: 'slow', external: w.name, ms: SLOW_EXTERNAL_MS } }));
+  return out;
+}
+// Apply a fault to a copy of the Deploy and compile it. The Deploy itself never changes.
+// Returns { M, sc, scale, notes }: notes say, in plain words, what each affected resource does about it.
+function applyFault(B, A, Dp, sc, fault) {
+  const D2 = JSON.parse(JSON.stringify(Dp)); const V = validateDeploy(B, A, D2); if (!V.valid) return null;
+  const M = compileModel(B, A, D2, V); const notes = []; const code = r => REGIONS[r].code; let scale = 1;
+  if (fault.kind === 'traffic') { scale = fault.factor || 2; notes.push(`${scale === 2 ? 'Twice' : scale + ' times'} as many requests: about ${Math.round(scenarioRate(sc) * scale).toLocaleString()} requests/s at the peak instead of ${Math.round(scenarioRate(sc)).toLocaleString()}.`); }
+  if (fault.kind === 'slow') {
+    if (fault.store) { const S = D2.stores.find(x => x.id === fault.store); if (S) { S.slowMs = fault.ms; notes.push(`Every read and write to ${S.name} takes ${fault.ms} ms longer. Requests that wait on it slow down, and compute holds each request longer.`); } }
+    if (fault.external) { M.slowExt = { [fault.external]: fault.ms }; notes.push(`${fault.external} answers ${fault.ms} ms slower. Every request that calls it waits that long too.`); }
+  }
+  if (fault.kind === 'region' || fault.kind === 'zone') {
+    const r = fault.region; const zone = fault.kind === 'zone'; const what = zone ? `losing a zone in ${code(r)}` : `losing ${code(r)}`;
+    D2.compute.forEach(C => {
+      if (!C.regions.includes(r)) return; const z = zonesOf(C, false);
+      if (zone && !z) { notes.push(`${C.name} is spread across zones by the provider, so it keeps running.`); return; }
+      if (zone && z > 1) { C.keep = Object.assign({}, C.keep, { [r]: (z - 1) / z }); notes.push(`${C.name} loses 1 of its ${z} zones in ${code(r)}: ${Math.round(100 / z)}% of its machines there, at most ${Math.max(1, Math.floor((C.max || 1) * (z - 1) / z))} of ${C.max || 1} instances left.`); return; }
+      const where = zone ? `runs in one zone of ${code(r)}` : `runs in ${code(r)}`;
+      if (C.regions.length > 1) { C.regions = C.regions.filter(x => x !== r); notes.push(`${C.name} ${where}, so it is gone there. Its traffic moves to ${C.regions.map(code).join(', ')}.`); }
+      else { C.down = `${C.name} is down after ${what}`; notes.push(`${C.name} only ${where}, so it is down.`); }
+    });
+    D2.stores.forEach(S => {
+      if (!S.regions.includes(r)) return; const z = zonesOf(S, true);
+      if (zone && !z) { notes.push(`${S.name} is spread across zones by the provider, so it keeps working.`); return; }
+      if (zone && z > 1 && !zonesEditable(S, true)) { notes.push(`${S.name} runs across ${z} zones, so it keeps working.`); return; }
+      if (zone && z > 1) { notes.push(`${S.name} fails over to its standby in another zone. In real life that takes about a minute of errors.`); return; }
+      const where = zone ? `in one zone of ${code(r)}` : `in ${code(r)}`; const rest = S.regions.filter(x => x !== r);
+      if (!rest.length || S.repl === 'single') { S.down = `${S.name} is unavailable after ${what}`; notes.push(`${S.name} lives only ${where}, so it is unavailable.`); return; }
+      if (S.repl === 'consensus' && rest.length <= S.regions.length / 2) { S.down = `${S.name} lost its majority after ${what}`; notes.push(`${S.name} needs a majority of its ${S.regions.length} regions to agree, and only ${rest.length} remain, so it stops.`); return; }
+      const lostPrimary = S.primary === r && S.repl !== 'multi-primary'; S.regions = rest;
+      if (lostPrimary) { S.primary = nearestRegion(rest, r); notes.push(`${S.name} promotes its copy in ${code(S.primary)} to primary.${S.repl === 'read-replicas' || S.repl === 'crr' ? ' Copies are updated a moment late, so the last writes before the failure can be lost.' : ''}`); }
+      else notes.push(`${S.name} keeps serving from ${rest.map(code).join(', ')}.`);
+    });
+    if (!zone && D2.regions.length > 1) D2.regions = D2.regions.filter(x => x !== r);
+    if (!notes.length) notes.push(`Nothing in this design runs in ${code(r)}.`);
+  }
+  return { M, sc: scale !== 1 ? Object.assign({}, sc, { count: (sc.count || 0) * scale }) : sc, scale, notes };
+}
+// One sentence on what the experiment did to the design, failures first.
+function compareExperiment(sc, before, after) {
+  const goal = sc.goalMs || 300; const pct = v => `${(v * 100).toFixed(1)}%`;
+  const reason = Object.entries(after.why || {}).sort((a, b) => b[1] - a[1])[0];
+  if (after.sysErr > 0.01 && after.sysErr > before.sysErr * 1.5) return `The design does not survive this: ${pct(after.sysErr)} of requests fail${reason ? ` (mostly: ${reason[0].toLowerCase()})` : ''}, up from ${pct(before.sysErr)}.`;
+  if (after.sysErr > 0.01) return `Requests were already failing (${pct(before.sysErr)}) and now ${pct(after.sysErr)} fail.`;
+  if (before.sysErr > 0.01) return `Failures drop from ${pct(before.sysErr)} to ${pct(after.sysErr)}.`;
+  const p = (v) => Math.round(v);
+  if (before.p99 <= goal && after.p99 > goal) return `Requests still succeed, but the slowest 1% now take ${p(after.p99)} ms, over the ${p(goal)} ms goal (was ${p(before.p99)} ms).`;
+  if (Math.abs(after.p99 - before.p99) / Math.max(1, before.p99) < 0.05) return `The design rides through it: p99 stays about ${p(after.p99)} ms and failures stay under 1%.`;
+  return `The design survives: p99 goes from ${p(before.p99)} to ${p(after.p99)} ms, ${after.p99 <= goal ? 'still within' : 'still over'} the ${p(goal)} ms goal.`;
+}
+
 /* ---------- batch scenarios (file drops, scheduled jobs) ---------- */
 function evaluateBatch(M, sc) {
   const e = entryInfo(M.A, sc.entry); const rows = e.type === 'file' ? (sc.rows || 1) : 1;
@@ -365,15 +433,19 @@ function shapeAt(sc, f) {
 const SCALE_RATE = { k8s: 0.6, vm: 0.15, ctr: 2.5 }; // fraction of current size added per minute
 function simulateTimeline(M, sc, opt) {
   opt = opt || {}; const F = opt.frames || 40; const durS = (sc.durationMin || 60) * 60; const dt = durS / F;
+  // opt.fault = { at: 0..1, M, scale, label, notes }: from that point on, run the broken model.
+  const fault = opt.fault || null; const fi = fault ? Math.min(F - 1, Math.max(0, Math.round((fault.at == null ? 0.5 : fault.at) * F))) : Infinity;
   let base = (sc.count || 0) / durS; const inst = {};
   if (sc.burst === 'ramp') { const cap = capacityLambda(M, sc).lamCap; base = Math.max(base, cap * 1.35 / 2.75); } const backlog = {}; const frames = []; const events = [];
   const prevRho = {}; let prevErr = 0;
   for (let i = 0; i < F; i++) {
-    const f = (i + 0.5) / F; const lam = base * shapeAt(sc, f);
-    const r = evaluateRate(M, sc, { lambda: lam, N: opt.N || 220, seed: 100 + i, adjust: R => {
+    const f = (i + 0.5) / F; const broken = i >= fi; const lam = base * shapeAt(sc, f) * (broken && fault.scale ? fault.scale : 1);
+    if (i === fi) { events.push({ i, t: f * durS, kind: 'bad', fault: true, msg: fault.label }); (fault.notes || []).forEach(n => events.push({ i, t: f * durS, kind: 'info', fault: true, msg: n })); }
+    const r = evaluateRate(broken ? fault.M : M, sc, { lambda: lam, N: opt.N || 220, seed: 100 + i, adjust: R => {
       Object.entries(R).forEach(([k, st]) => {
-        if (st.type !== 'compute' || st.ref.type === 'fn') return;
-        const C = st.ref; const prev = inst[k] != null ? inst[k] : Math.max(C.min || 0, i === 0 ? st.inst : 0);
+        if (st.type !== 'compute' || st.ref.type === 'fn' || st.down) return;
+        const C = st.ref; let prev = inst[k] != null ? inst[k] : Math.max(C.min || 0, i === 0 ? st.inst : 0);
+        if (i === fi && st.keep < 1) prev = Math.max(0, Math.floor(prev * st.keep)); // machines in the lost zone are gone at once
         const grow = Math.max(1, Math.ceil(prev * SCALE_RATE[C.type] * dt / 60));
         const want = st.inst; const now = want > prev ? Math.min(want, prev + grow) : Math.max(want, prev - Math.ceil(prev * 0.3));
         if (now !== prev && i > 0) events.push({ i, t: f * durS, kind: now > prev ? 'scale' : 'scalein', k, msg: `${C.name} (${REGIONS[st.region].code}) ${now > prev ? 'scaled out' : 'scaled in'}: ${prev} → ${now} ${C.type === 'k8s' ? 'pods' : 'instances'}` });
@@ -382,8 +454,9 @@ function simulateTimeline(M, sc, opt) {
       });
     } });
     Object.entries(r.lags).forEach(([d, L]) => { const b = Math.max(0, (backlog[d] || 0) + (L.pubRate - L.capRate) * dt); if (b > 1000 && !(backlog[d] > 1000)) events.push({ i, t: f * durS, kind: 'backlog', msg: `${d} is backing up: consumers handle ${fmtN(L.capRate)}/s, ${fmtN(L.pubRate)}/s arriving` }); if (b === 0 && backlog[d] > 1000) events.push({ i, t: f * durS, kind: 'ok', msg: `${d} backlog cleared` }); backlog[d] = b; });
-    const res = {}; Object.entries(r.R).forEach(([k, st]) => { if (st.type === 'external') return; res[k] = { rho: st.rho, inst: st.inst, lag: st.lag || 0, label: st.label, type: st.type, what: st.what };
+    const res = {}; Object.entries(r.R).forEach(([k, st]) => { if (st.type === 'external') return; res[k] = { rho: st.rho, inst: st.inst, lag: st.lag || 0, label: st.label, type: st.type, what: st.what, down: !!st.down };
       const pr = prevRho[k] || 0;
+      if (st.down) { prevRho[k] = 0; return; } // the experiment's own events already say it is down
       if (st.rho >= 1 && pr < 1) events.push({ i, t: f * durS, kind: 'bad', k, msg: `${st.label} is over capacity (${Math.round(st.rho * 100)}% ${st.what || ''})` });
       else if (st.rho >= 0.8 && pr < 0.8) events.push({ i, t: f * durS, kind: 'warn', k, msg: `${st.label} passed 80% ${st.what || 'busy'}` });
       else if (st.rho < 0.7 && pr >= 0.8) events.push({ i, t: f * durS, kind: 'ok', k, msg: `${st.label} back under 70%` });
@@ -391,7 +464,7 @@ function simulateTimeline(M, sc, opt) {
     if (r.sysErr > 0.01 && prevErr <= 0.01) events.push({ i, t: f * durS, kind: 'bad', msg: `Requests start failing (${Math.round(r.sysErr * 100)}%): ${Object.keys(r.why).sort((a, b) => r.why[b] - r.why[a])[0] || 'overload'}` });
     if (r.sysErr <= 0.01 && prevErr > 0.01) events.push({ i, t: f * durS, kind: 'ok', msg: 'Errors back under 1%' });
     prevErr = r.sysErr;
-    frames.push({ i, t: f * durS, flows: r.flows, mode: 'rate', lam, p50: r.p50, p99: r.p99, err: r.sysErr, res, links: r.links, backlog: Object.assign({}, backlog), top: r.ranked[0] ? r.ranked[0][0] : null, cost: r.cost, R: r.R, origins: r.origins });
+    frames.push({ i, t: f * durS, flows: r.flows, mode: 'rate', lam, p50: r.p50, p99: r.p99, err: r.sysErr, res, links: r.links, backlog: Object.assign({}, backlog), top: r.ranked[0] ? r.ranked[0][0] : null, cost: r.cost, R: r.R, origins: r.origins, broken });
   }
   return { frames, events, durS, dt };
 }
@@ -409,10 +482,10 @@ function stepRequest(M, sc, path, origin, R) {
     const m = g.mult / g.par;
     if (g.kind === 'net') { dur = g.hop; why = g.inproc ? 'Same process: no network hop.' : g.external ? `Outside service ${REGIONS[g.to].code}; includes TLS and the provider’s front door${g.nat ? ', through the NAT gateway' : ''}.` : g.from !== g.to ? `Crosses regions ${REGIONS[g.from].code} → ${REGIONS[g.to].code}.` : 'Network hop inside the region.'; }
     else if (g.kind === 'cpu') { const st = g.comp && R['c:' + g.comp.id + '@' + g.region]; dur = g.cpu; if (st) { rho = st.rho; const r2 = Math.min(st.rho, 0.97); const cc = Math.max(1, (st.inst || 1) * (st.cores || 1)); wait = g.cpu * Math.pow(r2, Math.sqrt(2 * (cc + 1)) - 1) / (cc * (1 - r2)) * 0.7; } why = wait > 0.5 ? `Waited ${wait.toFixed(1)} ms for a free CPU: ${g.comp.name} is ${Math.round(rho * 100)}% busy.` : 'Work on the CPU.'; }
-    else if (g.kind === 'data') { const T = STORES[g.store.type]; const st = R['s:' + g.store.id + '@' + g.target]; rho = st ? st.rho : null; const r2 = Math.min(rho || 0, 0.97); const um = (1 + r2 * r2 * r2 / (1 - r2) * 0.5) * (g.fan > 1 ? 1 + 0.35 * Math.log2(g.fan) : 1); const prof = (g.op === 'read' ? T.read : T.write) || T.pub; const svc = prof[0]; wait = svc * (um - 1); dur = g.hop + g.quorum + svc + (g.rows > 1 ? g.rows * 0.01 : 0) + (g.scan ? g.rows / 40000 : 0);
-      why = [g.target !== g.region ? `${REGIONS[g.target].code} is ${Math.round(g.hop)} ms away.` : '', g.quorum ? `Waits ${g.quorum} ms for a majority of regions to agree.` : '', g.scan ? 'No index on this field, so it reads every row.' : '', g.fan > 1 ? `Asks all ${g.fan} shards and merges the answers.` : '', wait > 0.5 ? `Queued ${wait.toFixed(1)} ms: ${g.store.name} is ${Math.round(rho * 100)}% busy.` : ''].filter(Boolean).join(' ') || `${T.label} ${g.op}.`; }
+    else if (g.kind === 'data') { const T = STORES[g.store.type]; const st = R['s:' + g.store.id + '@' + g.target]; rho = st ? st.rho : null; const r2 = Math.min(rho || 0, 0.97); const um = (1 + r2 * r2 * r2 / (1 - r2) * 0.5) * (g.fan > 1 ? 1 + 0.35 * Math.log2(g.fan) : 1); const prof = (g.op === 'read' ? T.read : T.write) || T.pub; const svc = prof[0]; wait = svc * (um - 1); dur = g.hop + g.quorum + svc + (g.rows > 1 ? g.rows * 0.01 : 0) + (g.scan ? g.rows / 40000 : 0) + (g.store.slowMs || 0);
+      why = [g.store.slowMs ? `${g.store.name} is slowed by ${g.store.slowMs} ms in this experiment.` : '', g.target !== g.region ? `${REGIONS[g.target].code} is ${Math.round(g.hop)} ms away.` : '', g.quorum ? `Waits ${g.quorum} ms for a majority of regions to agree.` : '', g.scan ? 'No index on this field, so it reads every row.' : '', g.fan > 1 ? `Asks all ${g.fan} shards and merges the answers.` : '', wait > 0.5 ? `Queued ${wait.toFixed(1)} ms: ${g.store.name} is ${Math.round(rho * 100)}% busy.` : ''].filter(Boolean).join(' ') || `${T.label} ${g.op}.`; }
     else if (g.kind === 'pub') { const T = STORES[g.store.type]; const pp = T.pub || T.write; dur = g.hop + pp[0]; why = `Hands the message to ${g.store.name}. Consumers pick it up later.`; }
-    else if (g.kind === 'ext') { dur = g.ms; why = 'Response time you set in Build.'; }
+    else if (g.kind === 'ext') { const slow = (M.slowExt && M.slowExt[g.w]) || 0; dur = g.ms + slow; why = slow ? `Response time you set in Build, plus ${slow} ms from the experiment.` : 'Response time you set in Build.'; }
     else if (g.kind === 'err') { push({ label: g.label, dur: 0, kind: 'err', why: 'The request ends with this error.' }); break; }
     const total = (dur + wait) * m;
     const o = { label: g.label, dur: total, wait: wait * m, kind: g.kind, box, fromBox: g.fromBox, toBox: g.toBox, rho, why, mult: g.mult, par: g.par, g };
@@ -422,4 +495,4 @@ function stepRequest(M, sc, path, origin, R) {
   if (grp) t = gs + gmax;
   return { steps, total: t };
 }
-if (typeof module !== 'undefined') module.exports = { rateVerdict, suggestionsFor, simulateTimeline, stepRequest, shapeAt, evaluateRate, evaluateBatch, stressTest, tracePath, compileModel, scenarioMode, scenarioRate, entryInfo, planPath, fmtN };
+if (typeof module !== 'undefined') module.exports = { faultOptions, applyFault, compareExperiment, rateVerdict, suggestionsFor, simulateTimeline, stepRequest, shapeAt, evaluateRate, evaluateBatch, stressTest, tracePath, compileModel, scenarioMode, scenarioRate, entryInfo, planPath, fmtN };

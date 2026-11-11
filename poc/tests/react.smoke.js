@@ -156,6 +156,18 @@ async function main() {
     await page.getByRole('button', { name: 'Compare designs' }).click();
     await page.getByRole('region', { name: 'Design comparison' }).waitFor();
     await page.getByText('Same scenario, two Deploys').waitFor();
+    // Experiments: break one zone on the single-region design, compare, then watch it in playback.
+    await page.getByLabel('Experiment', { exact: true }).selectOption('zone:use1');
+    await page.getByRole('button', { name: 'Compare before and after' }).click();
+    const experimentCard = page.getByRole('region', { name: 'Experiment result' });
+    await experimentCard.waitFor();
+    await experimentCard.getByText('What happened').waitFor();
+    await experimentCard.locator('li', { hasText: 'zone' }).first().waitFor();
+    await page.getByRole('button', { name: 'Play it' }).click();
+    await page.getByLabel('Playback position').fill('40');
+    await page.locator('.fault-flag.on').waitFor();
+    await page.locator('.playback-events .fault-event').first().waitFor();
+    await page.locator('.playback-panel').getByRole('button', { name: 'Close' }).click();
 
     await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Build' }).click();
     await page.setViewportSize({ width: 400, height: 860 });

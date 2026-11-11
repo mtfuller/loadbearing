@@ -66,7 +66,7 @@ export function SimulateCanvas({ build, analysis, deploy, result, playback, trac
       <Legend showHeat />
       <div className="sim-why" role="status">
         {focused
-          ? <><strong>{focused.name}</strong>{state ? <> is {Math.round(state.rho * 100)}% {state.what || 'busy'} ({HEAT_WORDS[level].toLowerCase()}){state.inst != null && state.type === 'compute' ? `, running ${state.inst} ${state.inst === 1 ? 'instance' : 'instances'}` : ''}.</> : rate > 0 ? <> receives about {E.fmtN(rate)} requests per second.</> : <> has no measured load in this run.</>}</>
+          ? <><strong>{focused.name}</strong>{state?.down ? <> is down in this experiment. Requests that need it fail.</> : state ? <> is {Math.round(state.rho * 100)}% {state.what || 'busy'} ({HEAT_WORDS[level].toLowerCase()}){state.inst != null && state.type === 'compute' ? `, running ${state.inst} ${state.inst === 1 ? 'instance' : 'instances'}` : ''}.</> : rate > 0 ? <> receives about {E.fmtN(rate)} requests per second.</> : <> has no measured load in this run.</>}</>
           : 'Select a node to see why it is busy.'}
       </div>
     </section>
