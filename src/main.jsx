@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Background,
@@ -17,10 +17,23 @@ import '@xyflow/react/dist/style.css';
 import './styles.css';
 import { DeployMode } from './deploy-mode.jsx';
 import { SimulateCanvas } from './simulate-canvas.jsx';
+import { EXAMPLE_META, LEVEL_ORDER } from './examples-meta.js';
+import { Term } from './term.jsx';
 
 const E = window.Loadbearing;
-const SYSTEM_EXAMPLES = E.exampleSystems();
+const CHECKOUT_EXAMPLE = {
+  id: 'checkout', name: 'Checkout system',
+  summary: 'A store checkout with carts, payments, fraud scoring, fulfillment events, a product import and a nightly report.',
+  lesson: 'Step through a checkout on mock data, then compare a one-region monolith with global services.',
+  build: E.exampleBuild(), deploys: E.exampleDeploys()
+};
+const size = (example) => example.build.workloads.length + example.build.data.length;
+// Simplest first: by level, then by how many boxes the Build has.
+const SYSTEM_EXAMPLES = [...E.exampleSystems(), CHECKOUT_EXAMPLE].sort((a, b) =>
+  (LEVEL_ORDER[EXAMPLE_META[a.id]?.level] ?? 9) - (LEVEL_ORDER[EXAMPLE_META[b.id]?.level] ?? 9) || size(a) - size(b));
 const STORAGE_KEY = 'loadbearing-react-work';
+const TIPS_KEY = 'loadbearing-tips-hidden';
+const hasSavedWork = () => { try { return [STORAGE_KEY, 'loadbearing-work', 'meridian-v3-work'].some((key) => localStorage.getItem(key)); } catch { return false; } };
 const DATA_TYPES = ['table', 'kv', 'document', 'queue', 'stream', 'topic', 'file', 'blob'];
 const duplicate = (value) => JSON.parse(JSON.stringify(value));
 const shortType = (type) => type === 'kv' ? 'Key-value' : type[0].toUpperCase() + type.slice(1);
@@ -47,8 +60,12 @@ function initialDocs() {
 }
 
 function App() {
+  const [returning] = useState(hasSavedWork);
   const [docs, setDocs] = useState(initialDocs);
-  const [mode, setMode] = useState('build');
+  // First visit opens on the example gallery; returning visitors pick up where they left off.
+  const [mode, setMode] = useState(() => returning ? 'build' : 'home');
+  const [tipsHidden, setTipsHidden] = useState(() => { try { return localStorage.getItem(TIPS_KEY) === '1'; } catch { return false; } });
+  const [tipIndex, setTipIndex] = useState(0);
   const [selection, setSelection] = useState(null);
   const [deployFocus, setDeployFocus] = useState(null);
   const [history, setHistory] = useState([]);
@@ -56,7 +73,6 @@ function App() {
   const [scenarioId, setScenarioId] = useState('');
   const [result, setResult] = useState(null);
   const [comparison, setComparison] = useState(null);
-  const [examplesOpen, setExamplesOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [dialog, setDialog] = useState(false);
   const [library, setLibrary] = useState(() => {
@@ -247,7 +263,8 @@ function App() {
     });
   };
 
-  const openExample = (example) => {
+  const hideTips = (hidden) => { setTipsHidden(hidden); try { localStorage.setItem(TIPS_KEY, hidden ? '1' : '0'); } catch { /* per-viewer convenience only */ } };
+  const openExample = (example, target = 'build') => {
     const build = duplicate(example.build);
     const starterDeploy = duplicate(example.deploys[0]);
     E.normalizeDeploy(starterDeploy);
@@ -258,8 +275,12 @@ function App() {
     });
     setScenarioId(build.scenarios[0]?.id || '');
     setSelection(null);
-    setMode('build');
-    setExamplesOpen(false);
+    setResult(null);
+    setComparison(null);
+    setPlayback(null);
+    setTrace(null);
+    setTipIndex(0);
+    setMode(target);
   };
 
   const startPlayback = () => {
@@ -460,7 +481,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <a className="brand" href="#" aria-label="Loadbearing home">
+        <a className="brand" href="#" aria-label="Loadbearing home" onClick={(event) => { event.preventDefault(); setMode('home'); }}>
           <span className="brand-mark">L</span>
           <span>Loadbearing</span>
         </a>
@@ -484,7 +505,8 @@ function App() {
           })}
         </nav>
         <div className="header-actions">
-          <button type="button" className="button quiet" onClick={() => setExamplesOpen(true)}>Explore examples</button>
+          <button type="button" className={`button quiet ${mode === 'home' ? 'active' : ''}`} onClick={() => setMode('home')}>Explore examples</button>
+          {activeExample && tipsHidden && mode !== 'home' && <button type="button" className="button quiet" onClick={() => hideTips(false)}>Tips</button>}
           <button type="button" className="button quiet" onClick={() => setDialog(true)}>Save &amp; load</button>
           <button type="button" className="button quiet" onClick={undo} disabled={!history.length}>Undo</button>
           <button type="button" className="button quiet" onClick={redo} disabled={!future.length}>Redo</button>
@@ -493,6 +515,22 @@ function App() {
       </header>
 
       {message && <div className="notice" role="status">{message}<button type="button" onClick={() => setMessage('')}>Dismiss</button></div>}
+      {mode !== 'home' && activeExample && !tipsHidden && EXAMPLE_META[activeExample.id] && <TryThis
+        example={activeExample}
+        tips={EXAMPLE_META[activeExample.id].tries}
+        index={tipIndex}
+        setIndex={setTipIndex}
+        mode={mode}
+        goTo={switchMode}
+        onHide={() => hideTips(true)}
+      />}
+      {mode === 'home' && <div className="home-scroll"><HomeGallery
+        examples={SYSTEM_EXAMPLES}
+        current={returning || history.length ? docs.build : null}
+        activeId={activeExample?.id}
+        onOpen={openExample}
+        onContinue={() => setMode('build')}
+      /></div>}
       {mode === 'build' && (
         <BuildMode
           build={docs.build}
@@ -547,7 +585,6 @@ function App() {
         onExport={exportDoc}
         onDelete={deleteSavedDoc}
       />}
-      {examplesOpen && <ExamplesDialog examples={SYSTEM_EXAMPLES} onClose={() => setExamplesOpen(false)} onOpen={openExample} />}
       <footer className="app-footer">
         <span>Learning model only · results are approximate, not production capacity estimates.</span>
         <span>Saved automatically in this browser.</span>
@@ -620,6 +657,12 @@ function BuildMode({ build, analysis, selection, setSelection, addWorkload, addD
   ], [analysis, build]);
 
   useEffect(() => setNodes(graphNodes), [graphNodes]);
+  // Names the code editor can complete: request handlers to call, data to touch, and each data node's fields.
+  const completionNames = useMemo(() => ({
+    handlers: build.workloads.flatMap((workload) => Object.keys(analysis.W[workload.name]?.handlers || {})
+      .filter((handler) => !/\s/.test(handler)).map((handler) => `${workload.name}.${handler}`)),
+    data: build.data.map((item) => ({ name: item.name, fields: (item.fields || []).map((field) => field.name) }))
+  }), [analysis, build]);
 
   const edges = useMemo(() => {
     const workloadIds = Object.fromEntries(build.workloads.map((item) => [item.name, `w:${item.id}`]));
@@ -773,6 +816,7 @@ function BuildMode({ build, analysis, selection, setSelection, addWorkload, addD
             node={selectedNode}
             updateBuild={updateBuild}
             onDelete={deleteSelected}
+            names={completionNames}
           />
         ) : (
           <div className="inspector-empty"><span className="inspector-mark">↖</span><strong>Select a node</strong><span>Inspect its details here. Drag nodes to arrange your design.</span></div>
@@ -830,11 +874,48 @@ function PaletteItem({ kind, label, description, onClick }) {
   );
 }
 
-function NodeInspector({ type, node, updateBuild, onDelete }) {
+// What the word being typed could become, from the text before the cursor on its line.
+function completionsFor(before, names) {
+  if (!names) return null;
+  const dataNames = names.data.map((item) => item.name);
+  let match = before.match(/\bcall\s+([\w.]*)$/);
+  if (match) return { partial: match[1], options: names.handlers };
+  match = before.match(/\b(?:read|insert|update|upsert|delete|publish)\s+(\w*)$/) || before.match(/\bwhen\s+(?:message|file|change)\s+(\w*)$/) || before.match(/\bin\s+(\w*)$/);
+  if (match) return { partial: match[1], options: dataNames };
+  match = before.match(/\b(?:read|update|upsert|delete)\s+(\w+)\s+(?:by|where)\s+(\w*)$/);
+  if (match) return { partial: match[2], options: names.data.find((item) => item.name === match[1])?.fields || [] };
+  return null;
+}
+
+const STATEMENT_HELP = {
+  call: 'Wait for another workload to handle a request.',
+  read: 'Read rows. Add by field to look up by that field, and many N for several rows.',
+  insert: 'Write a new row or object.',
+  update: 'Change existing rows found by a field.',
+  publish: 'Send a message to a queue, stream or topic. Consumers handle it later.',
+  if: 'Branch on a condition. @50% is how often it is true in simulations.',
+  'for each': 'Repeat for each item. parallel N handles N at once.',
+  parallel: 'Run the statements inside at the same time.',
+  compute: 'Spend CPU time on the current compute.',
+  error: 'End the request with an error code.',
+  when: 'Start a new handler: a request, or message, file, change or schedule trigger.'
+};
+
+function NodeInspector({ type, node, updateBuild, onDelete, names }) {
   const isWorkload = type === 'workload';
   const [name, setName] = useState(node.name);
   const [code, setCode] = useState(node.code || '');
   const codeRef = useRef(null);
+  const [cursor, setCursor] = useState(null);
+  // Place the caret in the same commit as a programmatic edit, before the next keystroke can land.
+  const pendingCaret = useRef(null);
+  useLayoutEffect(() => {
+    const textarea = codeRef.current;
+    if (pendingCaret.current == null || !textarea) return;
+    textarea.focus();
+    textarea.setSelectionRange(pendingCaret.current, pendingCaret.current);
+    pendingCaret.current = null;
+  }, [code]);
   useEffect(() => setName(node.name), [node.name]);
   useEffect(() => setCode(node.code || ''), [node.code]);
   const flushName = () => {
@@ -852,17 +933,26 @@ function NodeInspector({ type, node, updateBuild, onDelete }) {
       if (item) item.code = code;
     });
   };
+  const lineBefore = cursor == null ? '' : code.slice(code.lastIndexOf('\n', cursor - 1) + 1, cursor);
+  const completion = completionsFor(lineBefore, names);
+  const suggestions = completion ? completion.options.filter((option) => option.toLowerCase().startsWith(completion.partial.toLowerCase()) && option !== completion.partial).slice(0, 8) : [];
+  const complete = (option) => {
+    const start = cursor - completion.partial.length;
+    const next = `${code.slice(0, start)}${option}${code.slice(cursor)}`;
+    const at = start + option.length;
+    pendingCaret.current = at;
+    setCode(next);
+    setCursor(at);
+  };
   const insertSnippet = (snippet) => {
     const textarea = codeRef.current;
     if (!textarea) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const next = `${code.slice(0, start)}${snippet}${code.slice(end)}`;
+    pendingCaret.current = start + snippet.length;
     setCode(next);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + snippet.length, start + snippet.length);
-    });
+    setCursor(start + snippet.length);
   };
   const indentCode = (event) => {
     const textarea = codeRef.current;
@@ -895,17 +985,22 @@ function NodeInspector({ type, node, updateBuild, onDelete }) {
             if (item) item.external = event.target.checked;
           })} /> Runs outside your system</label>
           <label className="field-label">Workload code
-            <textarea ref={codeRef} className="code-input" value={code} spellCheck="false" onChange={(event) => setCode(event.target.value)} onKeyDown={indentCode} onBlur={flushCode} />
+            <textarea ref={codeRef} className="code-input" value={code} spellCheck="false"
+              onChange={(event) => { setCode(event.target.value); setCursor(event.target.selectionStart); }}
+              onSelect={(event) => setCursor(event.target.selectionStart)}
+              onKeyDown={(event) => { if (event.key === 'Tab' && suggestions.length) { event.preventDefault(); complete(suggestions[0]); return; } indentCode(event); }}
+              onBlur={flushCode} />
           </label>
+          {suggestions.length > 0 && <div className="completions" aria-label="Suggestions"><span>Tab to use</span>{suggestions.map((option) => <button type="button" key={option} onMouseDown={(event) => event.preventDefault()} onClick={() => complete(option)}>{option}</button>)}</div>}
           <div className="snippet-tools" aria-label="Insert code statement">
-            {['call', 'read', 'insert', 'update', 'publish', 'if', 'for each', 'parallel', 'compute', 'error', 'when'].map((snippet) => <button key={snippet} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertSnippet(({
+            {['call', 'read', 'insert', 'update', 'publish', 'if', 'for each', 'parallel', 'compute', 'error', 'when'].map((snippet) => <button key={snippet} type="button" title={STATEMENT_HELP[snippet]} onMouseDown={(event) => event.preventDefault()} onClick={() => insertSnippet(({
               call: 'call Workload.Handler\n', read: 'read Data by field\n', insert: 'insert Data\n', update: 'update Data by id\n',
               publish: 'publish Data\n', if: 'if Condition @50% {\n  \n}\n', 'for each': 'for each item in Data parallel 10 {\n  \n}\n',
               parallel: 'parallel {\n  \n}\n', compute: 'compute 15ms\n', error: 'error 500\n', when: 'when Handler {\n  \n}\n'
             })[snippet])}>{snippet}</button>)}
           </div>
           <p className="helper-text">Connections update from <code>call</code>, data operations, and event triggers. Use the statement chips for syntax patterns; press Tab to indent.</p>
-          <details className="language-reference"><summary>Language reference</summary><p><code>when Name {'{ }'}</code> handles requests. Use <code>when message Data {'{ }'}</code>, <code>when file Data {'{ }'}</code>, or <code>when schedule "daily 02:00" {'{ }'}</code> for background work.</p><p><code>call Service.Handler</code> waits for another workload. <code>read Data by field many 20</code> reads rows; <code>insert</code>, <code>update</code>, <code>upsert</code>, and <code>delete</code> write data. <code>publish Data</code> sends a message.</p><p><code>if Condition @10% {'{ }'} else {'{ }'}</code> branches. <code>for each item in File parallel 50 {'{ }'}</code> repeats in batches. <code>parallel {'{ }'}</code> runs statements concurrently. <code>compute 15ms</code> models CPU time; <code>error 402</code> and <code>return</code> end a request.</p></details>
+          <details className="language-reference" open={!node.code || node.code.trim().length < 40}><summary>Language reference</summary><p><code>when Name {'{ }'}</code> handles requests. Use <code>when message Data {'{ }'}</code>, <code>when file Data {'{ }'}</code>, or <code>when schedule "daily 02:00" {'{ }'}</code> for background work.</p><p><code>call Service.Handler</code> waits for another workload. <code>read Data by field many 20</code> reads rows; <code>insert</code>, <code>update</code>, <code>upsert</code>, and <code>delete</code> write data. <code>publish Data</code> sends a message.</p><p><code>if Condition @10% {'{ }'} else {'{ }'}</code> branches. <code>for each item in File parallel 50 {'{ }'}</code> repeats in batches. <code>parallel {'{ }'}</code> runs statements concurrently. <code>compute 15ms</code> models CPU time; <code>error 402</code> and <code>return</code> end a request.</p></details>
         </>
       ) : (
         <>
@@ -1023,22 +1118,55 @@ function LibraryDialog({ docs, library, onClose, onSave, onLoad, onExport, onDel
   );
 }
 
-function ExamplesDialog({ examples, onClose, onOpen }) {
+function HomeGallery({ examples, current, activeId, onOpen, onContinue }) {
   return (
-    <div className="dialog-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="library-dialog examples-dialog" role="dialog" aria-modal="true" aria-labelledby="examples-title">
-        <div className="card-heading"><div><p className="eyebrow">Start exploring</p><h2 id="examples-title">Choose a system to experiment with</h2></div><button className="text-button" type="button" onClick={onClose}>Close</button></div>
-        <p className="helper-text">Each example opens a working Build, a starter Deploy and scenarios. Switch Deploys and compare the results.</p>
-        <div className="example-list">
-          {examples.map((example) => (
-            <article className="example-card" key={example.id}>
-              <div><h3>{example.name}</h3><p>{example.summary}</p><small>Try this: {example.lesson}</small></div>
-              <button type="button" className="button primary" onClick={() => onOpen(example)}>Open example</button>
+    <section className="home-page" aria-labelledby="home-title">
+      <div className="home-intro">
+        <p className="eyebrow">Explore examples</p>
+        <h1 id="home-title">Pick a system and see how it behaves under load</h1>
+        <p>Each example is a working design: its logic, a starter deployment, a scaled one, and traffic to run. Open one, run it, change one thing, and run it again.</p>
+      </div>
+      {current && <div className="continue-card"><div><span>Continue where you left off</span><strong>{current.name}</strong></div><button type="button" className="button" onClick={onContinue}>Continue</button></div>}
+      <div className="gallery">
+        {examples.map((example) => {
+          const meta = EXAMPLE_META[example.id] || {};
+          const parts = `${example.build.workloads.length} workloads · ${example.build.data.length} data`;
+          return (
+            <article className={`gallery-card ${example.id === activeId ? 'current' : ''}`} key={example.id}>
+              <div className="gallery-top"><span className={`level level-${(meta.level || '').toLowerCase()}`}>{meta.level || 'Example'}</span><small>{parts}</small></div>
+              <h2>{example.name}</h2>
+              <p>{example.summary}</p>
+              {meta.concepts && <ul className="concepts" aria-label="Concepts">{meta.concepts.map((concept) => <li key={concept}>{concept}</li>)}</ul>}
+              <p className="gallery-lesson">{example.lesson}</p>
+              <div className="gallery-actions">
+                <button type="button" className="button primary" onClick={() => onOpen(example, 'simulate')} aria-label={`Run ${example.name}`}>Run it</button>
+                <button type="button" className="button" onClick={() => onOpen(example, 'build')} aria-label={`Open ${example.name}`}>Look inside</button>
+              </div>
             </article>
-          ))}
-        </div>
-      </section>
-    </div>
+          );
+        })}
+      </div>
+      <p className="home-footnote">Everything runs in your browser. Results are approximate and meant for comparing designs, not for sizing a real system.</p>
+    </section>
+  );
+}
+
+// One suggested experiment at a time for the open example. Hidden for good with Hide; the Tips button brings it back.
+function TryThis({ example, tips, index, setIndex, mode, goTo, onHide }) {
+  const tip = tips[Math.min(index, tips.length - 1)];
+  const modeName = { build: 'Build', deploy: 'Deploy', simulate: 'Simulate' };
+  return (
+    <aside className="try-this" aria-label="Try this">
+      <span className="try-label">Try this · {example.name}</span>
+      <span className="try-count">{index + 1} of {tips.length}</span>
+      <p>{tip.text}</p>
+      {tip.mode !== mode && <button type="button" className="text-button" onClick={() => goTo(tip.mode)}>Go to {modeName[tip.mode]}</button>}
+      <div className="try-nav">
+        <button type="button" className="text-button" disabled={index === 0} onClick={() => setIndex(index - 1)}>Back</button>
+        <button type="button" className="text-button" disabled={index >= tips.length - 1} onClick={() => setIndex(index + 1)}>Next idea</button>
+        <button type="button" className="text-button quiet" onClick={onHide}>Hide</button>
+      </div>
+    </aside>
   );
 }
 
@@ -1164,10 +1292,10 @@ function SimulateMode({
             <>
               {verdict && <section className={`verdict-card ${verdict.status}`} role="status"><strong>{verdict.head}</strong><small>At {Math.round(result.lambda).toLocaleString()} requests/s, the busiest moment of this scenario.</small></section>}
               <div className="metric-grid">
-                <Metric label="p50 latency" value={result.ok ? `${Math.round(result.p50)} ms` : '—'} hint="Half of the requests that finished were faster." />
-                <Metric label="p99 latency" value={result.ok ? `${Math.round(result.p99)} ms` : '—'} hint={`99% of the requests that finished were faster. Goal: ${Math.round(verdict?.goal || 0)} ms.`} />
-                <Metric label="System failures" value={`${(result.sysErr * 100).toFixed(2)}%`} hint="Requests that failed due to a system limit." />
-                <Metric label="Estimated cost" value={`$${result.cost.toFixed(2)}/h`} hint="Directional estimate from model assumptions." />
+                <Metric term="p50" label="p50 latency" value={result.ok ? `${Math.round(result.p50)} ms` : '—'} hint="Half of the requests that finished were faster." />
+                <Metric term="p99" label="p99 latency" value={result.ok ? `${Math.round(result.p99)} ms` : '—'} hint={`99% of the requests that finished were faster. Goal: ${Math.round(verdict?.goal || 0)} ms.`} />
+                <Metric term="failures" label="System failures" value={`${(result.sysErr * 100).toFixed(2)}%`} hint="Requests that failed due to a system limit." />
+                <Metric term="cost" label="Estimated cost" value={`$${result.cost.toFixed(2)}/h`} hint="Directional estimate from model assumptions." />
               </div>
               {tips.length > 0 && <section className="explanation-card tips-card" aria-label="What to try next">
                 <p className="eyebrow">What to try next</p>
@@ -1307,8 +1435,8 @@ function StressCard({ stress, scenario }) {
   );
 }
 
-function Metric({ label, value, hint }) {
-  return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>{hint}</small></article>;
+function Metric({ label, value, hint, term }) {
+  return <article className="metric-card"><span>{term ? <Term k={term}>{label}</Term> : label}</span><strong>{value}</strong><small>{hint}</small></article>;
 }
 
 function Root() {
