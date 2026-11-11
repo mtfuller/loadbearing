@@ -596,6 +596,60 @@ button.map-ghost:hover i { box-shadow: 0 0 0 1.5px var(--accent); }
 
 /* Desktop: the workspace fills the window so the canvas fits on screen; side panels scroll on their own. */
 @media (min-width: 1121px) {
-  .workspace { flex: none; height: calc(100vh - 116px); min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .app-shell { height: 100vh; min-height: 0; }
+  .workspace { flex: 1 1 0; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .home-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; }
   .canvas-column { min-height: 0; overflow-y: auto; }
 }
+
+/* Home: example gallery */
+.home-page { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 40px; }
+.home-intro h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.035em; }
+.home-intro p:not(.eyebrow) { max-width: 640px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.continue-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.continue-card div { display: grid; gap: 2px; }
+.continue-card span { color: var(--muted); font-size: 11px; }
+.continue-card strong { font-size: 14px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-top: 22px; }
+.gallery-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.gallery-card.current { border-color: var(--accent); }
+.gallery-card h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
+.gallery-card > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.gallery-card .gallery-lesson { color: var(--ink); }
+.gallery-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gallery-top small { color: var(--muted); font-size: 11px; }
+.level { border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+.level-starter { background: var(--good-soft); color: var(--good); }
+.level-advanced { background: var(--warn-soft); color: var(--warn); }
+.concepts { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.concepts li { border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; color: var(--muted); font-size: 11px; }
+.gallery-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 6px; }
+.home-footnote { margin-top: 22px; color: var(--muted); font-size: 11px; }
+.button.active { border-color: var(--accent); color: var(--accent); }
+
+/* Try this: one suggested experiment for the open example */
+.try-this { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 24px; border-bottom: 1px solid var(--line); background: var(--accent-soft); font-size: 12px; }
+.try-label { color: var(--accent); font-weight: 700; }
+.try-count { color: var(--muted); font-size: 11px; }
+.try-this p { flex: 1 1 320px; margin: 0; color: var(--ink); line-height: 1.45; }
+.try-nav { display: flex; gap: 12px; }
+.text-button.quiet { color: var(--muted); }
+.text-button:disabled { opacity: .4; }
+
+/* Code editor suggestions */
+.completions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 2px 0 8px; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 8px; }
+.completions span { color: var(--muted); font-size: 10px; }
+.completions button { border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; background: var(--surface-alt); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.completions button:hover, .completions button:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+/* Glossary terms */
+.term { position: relative; border-bottom: 1px dotted currentColor; cursor: help; }
+.term-tip { position: absolute; z-index: 30; left: 0; top: calc(100% + 6px); width: 240px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: 0 6px 20px #0002; font-size: 11px; font-weight: 400; line-height: 1.45; letter-spacing: 0; text-transform: none; white-space: normal; visibility: hidden; opacity: 0; transition: opacity .12s; }
+.term:hover .term-tip, .term:focus .term-tip { visibility: visible; opacity: 1; }
+@media (max-width: 720px) {
+  .home-page { padding-top: 20px; }
+  .gallery { grid-template-columns: 1fr; }
+  .try-this { padding: 8px 12px; }
+}
+
+.metric-card:nth-child(even) .term-tip { left: auto; right: -14px; }

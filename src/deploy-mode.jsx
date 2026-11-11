@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { GLOSSARY, REPL_NOTES } from './examples-meta.js';
 import { WorldMap, ViewToggle, useCanvasView } from './world-map.jsx';
 import { InfraCanvas, Legend, resourceFor, startDrag, endDrag } from './infra-canvas.jsx';
 
@@ -317,6 +318,8 @@ function ComputeInspector({ build, deploy, compute, updateDeploy, header }) {
       <p className="helper-text">{E.COMPUTE[compute.type].note}</p>
       {E.COMPUTE[compute.type].sizes && <label className="field-label">Size<select value={compute.size} onChange={(event) => update('size', event.target.value)}>{Object.keys(E.COMPUTE[compute.type].sizes).map((size) => <option key={size}>{size}</option>)}</select></label>}
       {compute.type !== 'fn' && <div className="deploy-global-grid"><label className="field-label">Minimum instances<input type="number" min="0" value={compute.min ?? 0} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.min = Math.max(0, Number(event.target.value) || 0); if (item.max < item.min) item.max = item.min; })} /></label><label className="field-label">Maximum instances<input type="number" min="1" value={compute.max ?? 1} onChange={(event) => updateDeploy((doc) => { const item = doc.compute.find((entry) => entry.id === compute.id); item.max = Math.max(item.min || 0, Number(event.target.value) || 1); })} /></label></div>}
+      {compute.type !== 'fn' && <p className="helper-text">{GLOSSARY.minMax}</p>}
+      {compute.type === 'fn' && <p className="helper-text">{GLOSSARY.concurrency}</p>}
       {compute.type === 'fn' && <label className="field-label">Concurrency<input type="number" min="1" value={compute.concurrency || 1000} onChange={(event) => update('concurrency', Math.max(1, Number(event.target.value) || 1))} /></label>}
       {compute.type === 'fn' && <label className="field-label">Memory (MB)<input type="number" min="128" step="128" value={compute.memory || 1024} onChange={(event) => update('memory', Math.max(128, Number(event.target.value) || 128))} /></label>}
       <label className="toggle-field"><input type="checkbox" checked={!!compute.vpc} onChange={(event) => update('vpc', event.target.checked)} />Private network access</label>
@@ -351,11 +354,15 @@ function StoreInspector({ build, deploy, store, updateDeploy, header }) {
       {T.note && <p className="helper-text">{T.note}</p>}
       {T.usd && <label className="field-label">Size<select value={store.size || 'Medium'} onChange={(event) => update('size', event.target.value)}>{Object.keys(T.usd).map((size) => <option key={size}>{size}</option>)}</select></label>}
       <label className="field-label">Copies across regions<select value={store.repl} onChange={(event) => update('repl', event.target.value)}>{T.repl.map((value) => <option key={value} value={value}>{E.REPL[value].label}</option>)}</select></label>
+      {REPL_NOTES[store.repl] && <p className="helper-text">{REPL_NOTES[store.repl]}</p>}
       <label className="field-label">Read from<select value={store.readFrom || 'nearest'} onChange={(event) => update('readFrom', event.target.value)}><option value="nearest">Nearest copy</option><option value="primary">Primary only</option></select></label>
+      {store.regions.length > 1 && store.repl !== 'single' && <p className="helper-text">{GLOSSARY.readFrom}</p>}
       <div><span className="field-label">Regions</span><RegionChoices selected={store.regions} options={deploy.regions} onToggle={toggle} /></div>
       {store.repl !== 'single' && store.repl !== 'multi-primary' && <label className="field-label">Primary region<select value={store.primary} onChange={(event) => update('primary', event.target.value)}>{store.regions.map((region) => <option key={region} value={region}>{E.REGIONS[region]?.code || region}</option>)}</select></label>}
       {T.shards && <label className="field-label">Shards<input type="number" min="1" max="64" value={store.shards || 1} onChange={(event) => update('shards', Math.max(1, Math.min(64, Number(event.target.value) || 1)))} /></label>}
+      {T.shards && <p className="helper-text">{GLOSSARY.shards}</p>}
       {T.partitions && <label className="field-label">Partitions<input type="number" min="1" value={store.partitions || 12} onChange={(event) => update('partitions', Math.max(1, Number(event.target.value) || 1))} /></label>}
+      {T.partitions && <p className="helper-text">{GLOSSARY.partitions}</p>}
       <div><span className="field-label">Data</span>{build.data.map((data) => <React.Fragment key={data.id}><label className="toggle-field"><input type="checkbox" aria-label={`Store ${data.name} in ${store.name}`} checked={store.data.includes(data.name)} disabled={E.storeFit(store.type, data.kind).fit === 'no' && !store.data.includes(data.name)} onChange={(event) => move(data.name, event.target.checked ? store.id : '')} />{data.name} <small>{shortType(data.kind)}</small></label>{store.data.includes(data.name) && (T.shards || T.autoShard) && data.fields?.length > 0 && <label className="field-label">Partition {data.name} by<select value={store.dataCfg?.[data.name]?.pk || data.partitionKey || data.fields.find((field) => field.key)?.name || data.fields[0].name} onChange={(event) => updateDeploy((doc) => { const item = doc.stores.find((entry) => entry.id === store.id); item.dataCfg = item.dataCfg || {}; item.dataCfg[data.name] = { pk: event.target.value }; })}>{data.fields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}</select></label>}</React.Fragment>)}</div>
     </>
   );

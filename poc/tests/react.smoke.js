@@ -12,6 +12,21 @@ async function main() {
 
   try {
     await page.goto(process.env.APP_URL || 'http://127.0.0.1:5173');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    // a first visit opens on the example gallery, simplest example first
+    await page.getByRole('heading', { name: /Pick a system/ }).waitFor();
+    const firstCard = await page.locator('.gallery-card h2').first().innerText();
+    if (firstCard !== 'URL shortener') throw new Error(`Gallery should start with the simplest example, saw ${firstCard}.`);
+    await page.getByRole('button', { name: 'Run URL shortener' }).click();
+    await page.getByRole('heading', { name: 'See what happens under load' }).waitFor();
+    await page.getByRole('complementary', { name: 'Try this' }).waitFor();
+    await page.getByText(/^(Fails|Meets|Misses)/).first().waitFor();
+    await page.getByRole('button', { name: 'Hide' }).click();
+    await page.getByRole('button', { name: 'Tips' }).click();
+    await page.getByRole('complementary', { name: 'Try this' }).waitFor();
+    await page.getByRole('button', { name: 'Explore examples' }).click();
+    await page.getByRole('button', { name: 'Open Checkout system' }).click();
     await page.getByRole('heading', { name: 'System logic' }).waitFor();
     await page.locator('.react-flow__node').first().waitFor();
     if (!(await page.getByText('Build valid').count())) throw new Error('Sample Build should start valid.');
@@ -33,7 +48,7 @@ async function main() {
     await code.waitFor();
     await code.fill(`${await code.inputValue()}\n# React app smoke test`);
     await code.blur();
-    await page.getByRole('button', { name: 'Deploy' }).click();
+    await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Deploy' }).click();
 
     await page.getByRole('heading', { name: 'Map logic to infrastructure' }).waitFor();
     const canvas = page.getByTestId('infra-canvas');
@@ -66,7 +81,7 @@ async function main() {
     await worldMap.getByRole('button', { name: 'Fit map' }).click();
     await page.getByRole('group', { name: 'Canvas view' }).getByRole('button', { name: 'Diagram' }).click();
     await page.getByTestId('infra-canvas').locator('[data-region="euw1"]').first().waitFor();
-    await page.getByRole('button', { name: 'Simulate' }).click();
+    await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Simulate' }).click();
     await page.getByRole('heading', { name: 'See what happens under load' }).waitFor();
     await page.getByRole('button', { name: 'Run simulation' }).click();
     await page.getByText('p99 latency').waitFor();
@@ -112,7 +127,7 @@ async function main() {
     await page.getByRole('button', { name: 'Run simulation' }).click();
     await page.getByText('Finish time').waitFor();
 
-    await page.getByRole('button', { name: 'Build' }).click();
+    await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Build' }).click();
     await page.getByRole('button', { name: 'call', exact: true }).waitFor();
     await page.getByLabel('Entry point to step through').selectOption({ index: 1 });
     await page.getByRole('heading', { name: 'Step through behavior' }).waitFor();
@@ -127,7 +142,7 @@ async function main() {
       }
     }
     await page.getByText('Execution finished', { exact: false }).waitFor();
-    await page.getByRole('button', { name: 'Back' }).click();
+    await page.getByRole('region', { name: 'Build step-through' }).getByRole('button', { name: 'Back' }).click();
     await page.getByRole('button', { name: 'Step', exact: true }).click();
     await page.getByText('Execution finished', { exact: false }).waitFor();
     await page.getByRole('button', { name: 'Save & load' }).click();
@@ -136,13 +151,13 @@ async function main() {
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
 
     await page.getByRole('button', { name: 'Explore examples' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Open example' }).first().click();
-    await page.getByRole('button', { name: 'Simulate' }).click();
+    await page.getByRole('button', { name: 'Open URL shortener' }).click();
+    await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Simulate' }).click();
     await page.getByRole('button', { name: 'Compare designs' }).click();
     await page.getByRole('region', { name: 'Design comparison' }).waitFor();
     await page.getByText('Same scenario, two Deploys').waitFor();
 
-    await page.getByRole('button', { name: 'Build' }).click();
+    await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Build' }).click();
     await page.setViewportSize({ width: 400, height: 860 });
     await page.getByRole('heading', { name: 'System logic' }).waitFor();
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
