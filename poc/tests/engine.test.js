@@ -72,7 +72,7 @@ test('single request steps add up to the total', () => {
 });
 test('all system-design examples have valid Builds and Deploys', () => {
   const examples = E('exampleSystems()');
-  assert.strictEqual(examples.length, 5);
+  assert.strictEqual(examples.length, 7);
   for (let i = 0; i < examples.length; i++) {
     const example = examples[i];
     const analysis = E(`analyzeBuild(exampleSystems()[${i}].build)`);
@@ -133,7 +133,7 @@ test('system-design examples simulate a rate scenario and a batch scenario', () 
       batch: batch ? evaluateBatch(m, batch).finishS : null
     };
   })`);
-  assert.strictEqual(results.length, 5);
+  assert.strictEqual(results.length, 7);
   for (const result of results) {
     assert.ok(Number.isFinite(result.rate) && result.rate >= 0, `${result.name} rate simulation`);
     if (result.batch != null) assert.ok(Number.isFinite(result.batch) && result.batch >= 0, `${result.name} batch simulation`);
@@ -221,5 +221,36 @@ test('playback can break the design halfway and says what happened', () => {
   assert.strictEqual(JSON.stringify(r.broken), JSON.stringify([false, false, false, false, false, true, true, true, true, true]));
   assert.strictEqual(r.ev[0], 'us-east-1 goes down');
   assert.ok(r.late > r.early);
+});
+
+// ---------- caches, hot keys, retries and timeouts ----------
+E(`var sysRun = (sysId, dIndex, scIndex, edit, scEdit) => { const x = exampleSystems().find(s => s.id === sysId); const b = x.build; const a = analyzeBuild(b); const d = JSON.parse(JSON.stringify(x.deploys[dIndex])); normalizeDeploy(d); if (edit) edit(d); const sc = Object.assign({}, b.scenarios[scIndex || 0]); if (scEdit) scEdit(sc); const V = validateDeploy(b, a, d); const m = compileModel(b, a, d, V); return { b, a, d, sc, m, r: evaluateRate(m, sc, { N: 600, seed: 11 }) }; }`);
+test('a cache in front takes reads off the database and costs a little', () => {
+  const r = E(`(() => { const plain = sysRun('url-shortener', 0); const cached = sysRun('url-shortener', 0, 0, d => { d.stores[0].cache = { hit: 0.95 }; }); const k = Object.keys(plain.r.R).find(k => k.startsWith('s:' + plain.d.stores[0].id)); return { rho0: plain.r.R[k].rho, rho1: cached.r.R[k].rho, err0: plain.r.sysErr, err1: cached.r.sysErr, cost0: plain.r.cost, cost1: cached.r.cost }; })()`);
+  assert.ok(r.rho1 < r.rho0 * 0.2, JSON.stringify(r));
+  assert.ok(r.err1 < r.err0);
+  assert.ok(r.cost1 > r.cost0);
+});
+test('a cold cache sends every read to the database again', () => {
+  const r = E(`(() => { const x = sysRun('url-shortener', 0, 0, d => { d.stores[0].cache = { hit: 0.95 }; }); const ids = faultOptions(x.b, x.d).map(o => o.id); const f = applyFault(x.b, x.a, x.d, x.sc, { kind: 'cold' }); const after = evaluateRate(f.M, f.sc, { N: 600, seed: 11 }); return { ids, before: x.r.sysErr, after: after.sysErr, warm: f.warm }; })()`);
+  assert.ok(r.ids.includes('cold'));
+  assert.ok(r.after > r.before + 0.05, JSON.stringify(r));
+  assert.strictEqual(r.warm[0].hit, 0.95);
+});
+test('a hot key overloads one shard however many shards there are', () => {
+  const r = E(`(() => { const even = sysRun('url-shortener', 0, 0, d => { d.stores[0].shards = 8; }); const hot = sysRun('url-shortener', 0, 0, d => { d.stores[0].shards = 8; }, sc => { sc.hot = { ShortLinks: 0.4 }; }); const k = Object.keys(even.r.R).find(k => k.startsWith('s:' + even.d.stores[0].id)); const kv = sysRun('url-shortener', 1, 0, null, sc => { sc.hot = { ShortLinks: 0.4 }; }); const kk = Object.keys(kv.r.R).find(k => k.startsWith('s:' + kv.d.stores[0].id)); return { even: even.r.R[k].rho, hot: hot.r.R[k].rho, what: hot.r.R[k].what, kvWhat: kv.r.R[kk].what }; })()`);
+  assert.ok(r.hot > r.even * 2, JSON.stringify(r));
+  assert.strictEqual(r.what, 'one hot key');
+  assert.strictEqual(r.kvWhat, 'one hot key');
+});
+test('timeouts cut slow calls short and retries recover some of them', () => {
+  const run = (retries) => E(`(() => { const d = JSON.parse(JSON.stringify(deps[0])); normalizeDeploy(d); d.network.timeoutMs = 300; d.network.retries = ${retries}; const sc = B.scenarios[0]; const V = validateDeploy(B, A, d); const m = compileModel(B, A, d, V); const r = evaluateRate(m, sc, { N: 1500, seed: 11 }); return { err: r.sysErr, why: Object.keys(r.why) }; })()`);
+  const none = run(0), two = run(2);
+  assert.ok(none.why.some(w => /PaymentGateway.*timed out after 300 ms/.test(w)), none.why.join(','));
+  assert.ok(two.err < none.err, JSON.stringify([none.err, two.err]));
+});
+test('retries add load to an overloaded resource', () => {
+  const r = E(`(() => { const x = sysRun('url-shortener', 0, 0, d => { d.network = Object.assign({}, d.network, { retries: 2 }); }); return Object.values(x.r.R).filter(s => s.retryAmp > 1).length; })()`);
+  assert.ok(r > 0);
 });
 console.log(`\n${n} passed${process.exitCode ? ', some failed' : ''}`);

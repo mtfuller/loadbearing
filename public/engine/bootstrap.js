@@ -32,6 +32,7 @@ window.Loadbearing = {
   originsFor,
   runEntry,
   rateVerdict,
+  retryPolicy,
   applyFault,
   faultOptions,
   compareExperiment,

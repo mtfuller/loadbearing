@@ -1,0 +1,57 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-product-catalog-scaled",
+  "name": "Scaled multi-region design",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-product-catalog-scaled",
+      "name": "edge-services",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 6,
+      "max": 40,
+      "workloads": [
+        "CatalogAPI"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-product-catalog-scaled-0",
+      "name": "catalog-db",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "cache": {
+        "hit": 0.95
+      },
+      "data": [
+        "Products",
+        "Prices",
+        "Reviews"
+      ]
+    }
+  ]
+}

@@ -295,7 +295,7 @@ function App() {
     if (!applied) { setMessage('This design has deployment issues, so the experiment cannot run.'); return; }
     const model = E.compileModel(docs.build, analysis, simDeploy, simCheck);
     if (play) {
-      setPlayback({ timeline: E.simulateTimeline(model, scenario, { frames: 48, N: 200, fault: { at: 0.5, M: applied.M, scale: applied.scale, label: `Experiment: ${option.label.charAt(0).toLowerCase()}${option.label.slice(1)}`, notes: applied.notes } }), index: 0, speed: 1, playing: true, experiment: option.label });
+      setPlayback({ timeline: E.simulateTimeline(model, scenario, { frames: 48, N: 200, fault: { at: 0.5, M: applied.M, scale: applied.scale, warm: applied.warm, label: `Experiment: ${option.label.charAt(0).toLowerCase()}${option.label.slice(1)}`, notes: applied.notes } }), index: 0, speed: 1, playing: true, experiment: option.label });
       setTrace(null);
       return;
     }
@@ -1211,6 +1211,14 @@ function SimulateMode({
   const behind = result?.mode === 'rate' ? Object.entries(result.lags || {}) : [];
   const entry = scenario ? E.entryInfo(analysis, scenario.entry) : null;
   const conditions = scenario ? E.conditionsFor(analysis, scenario.entry) : [];
+  const hotData = useMemo(() => {
+    if (!scenario || mode !== 'rate' || !analysis.valid) return [];
+    const names = new Set();
+    E.enumeratePaths(analysis, scenario.entry, scenario.odds || {}).forEach((path) => path.steps.forEach((step) => { if ((step.k === 'data' || step.k === 'publish') && step.d) names.add(step.d); }));
+    // Queues, topics and files have no keys to be hot; tables, key-value, documents and streams do.
+    const kinds = Object.fromEntries(build.data.map((item) => [item.name, item.kind]));
+    return [...names].filter((name) => !['queue', 'topic', 'file', 'blob'].includes(kinds[name]));
+  }, [analysis, build.data, scenario, mode]);
   useEffect(() => {
     if (!playback?.playing) return undefined;
     const timer = window.setInterval(() => setPlayback((state) => {
@@ -1271,6 +1279,7 @@ function SimulateMode({
           </>}
         </div>}
         {scenario && mode === 'rate' && <section className="scenario-subsection"><h3>Where requests come from</h3><div className="scenario-editor origin-editor">{Object.entries(E.POPS).map(([key, pop]) => <label className="field-label" key={key}>{pop.label} (%)<input type="number" min="0" max="100" value={scenario.origins?.[key] || 0} onChange={(event) => updateScenario(scenario.id, (item) => { item.origins = { ...(item.origins || {}), [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }; })} /></label>)}</div></section>}
+        {scenario && mode === 'rate' && hotData.length > 0 && <section className="scenario-subsection" aria-label="Hot keys"><h3><Term k="hotKey">Hot keys</Term></h3><p className="helper-text">Share of each data's traffic that goes to one single key. 0% means traffic is spread evenly.</p>{hotData.map((name) => <label className="odds-control" key={name}><span>{name}</span><input type="range" min="0" max="80" step="5" aria-label={`Hot key share for ${name}`} value={Math.round((scenario.hot?.[name] || 0) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { const next = { ...(item.hot || {}) }; const value = Number(event.target.value) / 100; if (value > 0) next[name] = value; else delete next[name]; item.hot = next; })} /><strong>{Math.round((scenario.hot?.[name] || 0) * 100)}%</strong></label>)}</section>}
         {conditions.length > 0 && <section className="scenario-subsection"><h3>Branch choices</h3><p className="helper-text">Override the chance that each condition is true for this scenario.</p>{conditions.map((condition) => <label className="odds-control" key={condition.key}><span>{condition.w}.{condition.h}: {condition.cond}</span><input type="range" min="0" max="100" step="1" value={Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)} onChange={(event) => updateScenario(scenario.id, (item) => { item.odds = { ...(item.odds || {}), [condition.key]: Number(event.target.value) / 100 }; })} /><strong>{Math.round((scenario.odds?.[condition.key] ?? condition.def) * 100)}%</strong><button className="text-button" type="button" onClick={() => updateScenario(scenario.id, (item) => { delete item.odds?.[condition.key]; })}>Reset</button></label>)}</section>}
         {scenario && mode === 'rate' && check?.valid && <ExperimentPicker build={build} deploy={deploy} runExperiment={runExperiment} />}
         <section className="scenario-subsection live-tweaks" aria-label="Playground controls">
@@ -1286,6 +1295,14 @@ function SimulateMode({
               <label>Max instances<input type="number" min="1" aria-label={`Max instances for ${item.name}`} value={item.max ?? 1} onChange={(event) => updateDeploy((doc) => { const found = doc.compute.find((entry) => entry.id === item.id); if (found) { found.max = Math.max(1, Number(event.target.value) || 1); if ((found.min ?? 0) > found.max) found.min = found.max; } })} /></label>
             </div>
           ))}
+          {deploy.stores.filter((item) => item.cache?.hit > 0).map((item) => (
+            <div className="tweak-row" key={`cache-${item.id}`}><span>{item.name} cache</span>
+              <label>Hit ratio %<input type="number" min="0" max="99" aria-label={`Cache hit ratio for ${item.name}`} value={Math.round(item.cache.hit * 100)} onChange={(event) => updateDeploy((doc) => { const found = doc.stores.find((entry) => entry.id === item.id); if (found) found.cache = { hit: Math.max(0, Math.min(99, Number(event.target.value) || 0)) / 100 }; })} /></label>
+            </div>
+          ))}
+          <div className="tweak-row"><span><Term k="retries">Retries</Term></span>
+            <label>Tries again<input type="number" min="0" max="5" aria-label="Retries" value={deploy.network?.retries || 0} onChange={(event) => updateDeploy((doc) => { doc.network.retries = Math.max(0, Math.min(5, Number(event.target.value) || 0)); })} /></label>
+          </div>
           {deploy.stores.filter((item) => E.STORES[item.type].shards).map((item) => (
             <div className="tweak-row" key={item.id}><span>{item.name}</span>
               <label>Shards<input type="number" min="1" max="64" aria-label={`Shards for ${item.name}`} value={item.shards || 1} onChange={(event) => updateDeploy((doc) => { const found = doc.stores.find((entry) => entry.id === item.id); if (found) found.shards = Math.max(1, Math.min(64, Number(event.target.value) || 1)); })} /></label>
@@ -1335,6 +1352,12 @@ function SimulateMode({
                 <p>{limiting ? `The busiest thing requests wait on: ${Math.round((limiting.rho || 0) * 100)}% busy (${limiting.what || 'load'}) at about ${Math.round(result.lambda).toLocaleString()} requests per second.` : 'Try a higher request rate or a different design to reveal a bottleneck.'}</p>
                 {Object.entries(result.why || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([reason, count]) => <div className="reason-row" key={reason}><span>{reason}</span><strong>{(count / (result.samples || 1) * 100).toFixed(1)}% of requests failed here</strong></div>)}
               </section>
+              {(Object.keys(result.caches || {}).length > 0 || result.retry?.retries > 0 || result.retry?.timeoutMs > 0) && <section className="explanation-card" aria-label="Caches and retries">
+                <p className="eyebrow">Caches and retries</p>
+                {Object.values(result.caches || {}).map((cache) => <div className="reason-row" key={`${cache.ref.id}@${cache.region}`}><span>{cache.ref.name} cache ({E.REGIONS[cache.region].code})</span><strong>answers {Math.round(cache.hit * 100)}% of {Math.round(cache.reads).toLocaleString()} reads/s</strong></div>)}
+                {(result.retry?.retries > 0 || result.retry?.timeoutMs > 0) && <div className="reason-row"><span>Each call</span><strong>{result.retry.timeoutMs ? `gives up after ${result.retry.timeoutMs} ms` : 'waits as long as it takes'}{result.retry.retries ? `, tries ${result.retry.retries} more ${result.retry.retries === 1 ? 'time' : 'times'}` : ', no retries'}</strong></div>}
+                {Object.values(result.R || {}).filter((item) => item.retryAmp > 1.05).map((item) => <div className="reason-row" key={`amp-${item.label}`}><span>{item.label}</span><strong className="bad-text">retries add {Math.round((item.retryAmp - 1) * 100)}% more load</strong></div>)}
+              </section>}
               {behind.length > 0 && <section className="explanation-card" aria-label="Work that happens later">
                 <p className="eyebrow">Work that happens later</p>
                 <p>Messages are handled after the request returns, so a slow consumer builds a backlog instead of failing requests.</p>

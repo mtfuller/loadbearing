@@ -85,7 +85,7 @@ The proof of concept already teaches by showing mechanism (step-through, playbac
 | L3 | **Pattern library** | Open classic architectures as ready Builds and Deploys: cache-aside, outbox, fan-out on write vs. read, CQRS, sharded counters, saga, leader-follower vs. consensus | P0 | Five systems plus checkout; compare starter and scaled Deploys |
 | L4 | **What-if experiments** | Change one setting and see before and after side by side, with the difference explained ("p99 fell 210 ms because reads now stay in eu-west-1") | P0 | Compare scenario results across the two example Deploys; editable settings and richer explanations remain |
 | L5 | **Concept glossary in place** | Hover a term (quorum, back-pressure, hot partition) for a short explanation and a link to where it is happening in this design | P1 | No |
-| L6 | **Failure drills** | Inject zone loss, region loss, a slow dependency or a cold cache during playback and watch the system respond | P1 | Partly: zone, region, slow dependency and double traffic, as before/after or mid-playback (Simulate → Experiments). Cold cache waits for cache hit ratios. |
+| L6 | **Failure drills** | Inject zone loss, region loss, a slow dependency or a cold cache during playback and watch the system respond | P1 | Yes: zone, region, slow dependency, cold cache and double traffic, as before/after or mid-playback (Simulate → Experiments). |
 | L7 | **Assumptions page** | See and change every constant the model uses, so a learner can ask "what if disks were twice as fast?" | P1 | No |
 | L8 | **Share a lesson** | An educator shares a Build, Deploy, scenario and challenge as one link that opens read-only with "make a copy" | P1 | Partial (library, export) |
 | L9 | **Back-of-envelope mode** | Estimate p99 or max throughput before running, then compare the guess to the result | P2 | No |
@@ -368,7 +368,7 @@ The engine is analytic where it can be and Monte Carlo where shapes matter. It a
 W_q \approx \frac{s\,\rho^{\sqrt{2(c+1)}-1}}{c\,(1-\rho)} \qquad \mathrm{RTT}_{ms} = \frac{2d_{km}}{200} \times 1.35 + 4
 ```
 
-**Known simplifications**, to be listed on the Assumptions page (L7): no retries or timeouts yet; zones are a count, not placement (no subnets or zonal NAT); resources independent except shared compute; uniform keys (no hot partitions); fixed latency profiles per product.
+**Known simplifications**, to be listed on the Assumptions page (L7): retries add load only where a resource is already failing (one pass, not a full retry storm), and timeouts do not add load; zones are a count, not placement (no subnets or zonal NAT); resources independent except shared compute; keys are uniform unless a scenario marks one hot, and all hot keys of a store land on the same shard; a cache in front is sized to never be the bottleneck; fixed latency profiles per product.
 
 ## 13. UI architecture
 

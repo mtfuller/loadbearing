@@ -19,7 +19,7 @@ standalone proof of concept is retained under `poc/` for reference.
 | `poc/loadbearing.html` | The original standalone proof of concept. Open it directly in a browser. |
 | `poc/tests/` | Engine regressions plus Playwright smoke tests for the React app and original prototype. |
 | `mockups/` | 7 static HTML screens of the v1 design (`index.html` lists them); `source/` holds the Claude Design canvas originals. |
-| `examples/` | The checkout example and five system-design examples (URL shortener, search engine, social network, streaming service, food delivery), each with a Build and two Deploys. |
+| `examples/` | The checkout example and seven system-design examples (URL shortener, search engine, social network, streaming service, food delivery, product catalog, concert ticket sale), each with a Build and two Deploys. |
 | `catalog/aws.sample.json` | Sample entries in the planned v1 provider catalog format. |
 
 ## Quick start
@@ -39,6 +39,8 @@ npm run test:legacy-ui                    # standalone prototype browser walkthr
 The app opens on an example gallery, simplest first. **Run it** jumps straight to a live simulation; **Look inside** opens the Build. While an example is open, a "Try this" bar suggests one experiment at a time (hide it, and the Tips button brings it back).
 
 In Simulate, **Experiments** break or change one thing on a copy of the design: double the traffic, lose a whole region or one availability zone, or slow down a database or outside service. **Compare before and after** shows both runs side by side with what each resource did about it; **Play it** runs the scenario and breaks the design halfway through. Zones are set per compute and database in Deploy.
+
+Deploy can also put a **cache in front** of a database (with a hit ratio) and set a **timeout and retries** for every call. Scenarios can make one key **hot** (a viral link, a sold-out concert), which piles that share of the work onto one shard. The product catalog and concert ticket sale examples are built around these.
 
 1. **Build:** drag workload and data nodes onto the canvas; edit workload code, data fields, and positions. Use the entry-point step-through to see interpreter events and choose conditional branches.
 2. **Deploy:** build your infrastructure on a canvas. Add regions, compute, stores and network from the palette, drag your Build workloads and data onto them, edit details in the inspector, then apply validation fixes.

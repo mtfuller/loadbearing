@@ -51,7 +51,8 @@ function nodeDetail(gnode, resource, deploy) {
     const T = E.STORES[resource.type];
     const copies = resource.regions.length > 1 ? ` · ${E.REPL[resource.repl].short}` : '';
     const zones = E.zonesEditable(resource, true) ? ` · ${E.zonesOf(resource, true)} ${E.zonesOf(resource, true) === 1 ? 'zone' : 'zones'}` : '';
-    return `${T.label}${T.usd ? ` · ${resource.size || 'Medium'}` : ''}${copies}${zones}`;
+    const cache = resource.cache?.hit > 0 ? ` · cache ${Math.round(resource.cache.hit * 100)}%` : '';
+    return `${T.label}${T.usd ? ` · ${resource.size || 'Medium'}` : ''}${copies}${zones}${cache}`;
   }
   if (gnode.kind === 'entry') {
     const net = E.netRegion(deploy, gnode.region);

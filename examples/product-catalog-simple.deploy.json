@@ -1,0 +1,48 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-product-catalog-simple",
+  "name": "Single-region starter",
+  "regions": [
+    "use1"
+  ],
+  "peering": false,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-product-catalog-simple",
+      "name": "app",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Small",
+      "min": 2,
+      "max": 8,
+      "workloads": [
+        "CatalogAPI"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-product-catalog-simple-0",
+      "name": "catalog-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Products",
+        "Prices",
+        "Reviews"
+      ]
+    }
+  ]
+}

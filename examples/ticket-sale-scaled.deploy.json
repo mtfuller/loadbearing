@@ -1,0 +1,91 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-ticket-sale-scaled",
+  "name": "Scaled multi-region design",
+  "regions": [
+    "use1",
+    "euw1",
+    "apse1"
+  ],
+  "peering": true,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-ticket-sale-scaled",
+      "name": "edge-services",
+      "type": "k8s",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "size": "Medium",
+      "min": 6,
+      "max": 40,
+      "workloads": [
+        "TicketAPI",
+        "PaymentWorker"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-ticket-sale-scaled-0",
+      "name": "events-db",
+      "type": "postgres",
+      "regions": [
+        "use1",
+        "euw1",
+        "apse1"
+      ],
+      "primary": "use1",
+      "repl": "read-replicas",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "cache": {
+        "hit": 0.98
+      },
+      "data": [
+        "Events",
+        "Reservations"
+      ]
+    },
+    {
+      "id": "s-ticket-sale-scaled-1",
+      "name": "inventory-kv",
+      "type": "kv",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Inventory"
+      ]
+    },
+    {
+      "id": "s-ticket-sale-scaled-2",
+      "name": "payment-queue",
+      "type": "queue",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Medium",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ReservationEvents"
+      ]
+    }
+  ]
+}

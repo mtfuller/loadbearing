@@ -43,6 +43,26 @@ export const EXAMPLE_META = {
       { mode: 'simulate', text: 'Press Compare designs to see the sharded, multi-region index side by side.' }
     ]
   },
+  'product-catalog': {
+    level: 'Intermediate',
+    concepts: ['Read cache', 'Hit ratio', 'Cold start'],
+    tries: [
+      { mode: 'simulate', text: 'Run Holiday browsing on the starter: catalog-db is several times over capacity, and almost every request fails.' },
+      { mode: 'deploy', text: 'Select catalog-db, tick "Cache in front for reads" and leave it at 90%. Go back to Simulate and run again.' },
+      { mode: 'simulate', text: 'In the playground, lower the cache hit ratio to 60%, then 80%. Find where the database starts to fail.' },
+      { mode: 'simulate', text: 'Under Experiments, pick "Start with empty caches" and press Play it. Watch the database while the cache fills back up.' }
+    ]
+  },
+  'ticket-sale': {
+    level: 'Intermediate',
+    concepts: ['Hot keys', 'Retries', 'Async payments'],
+    tries: [
+      { mode: 'simulate', text: 'Press Compare designs. Even the scaled design fails: 70% of the traffic hits one event\'s inventory, and one key lives on one partition.' },
+      { mode: 'simulate', text: 'Under Hot keys, lower Inventory to 10% and run again. Same traffic, spread out, and it fits.' },
+      { mode: 'simulate', text: 'Set Retries to 3 in the playground and run the starter again. Every failed try comes back as more load.' },
+      { mode: 'simulate', text: 'Switch to Fans refreshing the page. Reads of a hot key can be cached: put a cache in front of the inventory store in Deploy.' }
+    ]
+  },
   'food-delivery': {
     level: 'Intermediate',
     concepts: ['Hot lookups', 'Queues absorb spikes', 'Multi-region writes'],
@@ -81,6 +101,11 @@ export const GLOSSARY = {
   loadShape: 'Steady keeps the rate flat. Peak burst triples it at the busiest moment. Ramp grows past capacity to find the breaking point.',
   minMax: 'Autoscaling keeps at least the minimum instances running and never goes past the maximum. Scaling up takes time, so sudden spikes hit before new instances are ready.',
   concurrency: 'How many requests functions can handle at the same moment in this region. Past this, requests are throttled.',
+  cache: 'A fast in-memory copy of recently read rows in front of a database. Reads it can answer never reach the database.',
+  hitRatio: 'The share of reads the cache answers. Popular data gets high hit ratios; an empty (cold) cache answers none until it fills.',
+  hotKey: 'One key (a celebrity, a big sale, a viral link) that gets a large share of all traffic. It lives on one shard, so adding shards does not spread it.',
+  timeout: 'How long a request waits for one call or data operation before giving up on that try. 0 means wait as long as it takes.',
+  retries: 'How many more times to try after a failure or timeout. Retries hide brief blips, but on an overloaded system every retry is more load.',
   zonesCompute: 'Zones are separate data centers inside a region. Spreading machines across zones means losing one zone takes away only part of the capacity.',
   zonesStore: 'One zone is cheapest, but losing that zone takes the database down. Two or more zones keep a standby that takes over, for about twice the cost.',
   zonesManaged: 'The provider spreads this across zones for you, so losing one zone does not stop it.',
