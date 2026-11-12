@@ -290,10 +290,18 @@ function GlobalInspector({ deploy, updateDeploy }) {
           {Object.entries(E.NET.link).map(([key, option]) => <option key={key} value={key}>{option.label}</option>)}
         </select>
       </label>}
+      <div className="deploy-global-grid">
+        <label className="field-label">Timeout per call (ms)<input type="number" min="0" step="50" value={deploy.network.timeoutMs || 0} onChange={(event) => updateDeploy((doc) => { doc.network.timeoutMs = Math.max(0, Number(event.target.value) || 0); })} /></label>
+        <label className="field-label">Retries<input type="number" min="0" max="5" value={deploy.network.retries || 0} onChange={(event) => updateDeploy((doc) => { doc.network.retries = Math.max(0, Math.min(5, Number(event.target.value) || 0)); })} /></label>
+      </div>
+      <p className="helper-text">{GLOSSARY.timeout} {GLOSSARY.retries}</p>
       <p className="helper-text">Select a node on the canvas to edit it. Drag workloads and data from the left onto compute and stores to place them.</p>
     </>
   );
 }
+
+// Stores that can sit behind a read cache. Redis is the cache; streams, queues and objects are not looked up by key.
+const CACHEABLE = ['postgres', 'distsql', 'kv', 'doc'];
 
 function ZonesField({ item, isStore, update }) {
   if (!E.zonesEditable(item, isStore)) return E.zonesOf(item, isStore) ? <p className="helper-text">Zones: {E.zonesOf(item, isStore)}. {GLOSSARY.zonesManaged}</p> : <p className="helper-text">{GLOSSARY.zonesManaged}</p>;
@@ -365,6 +373,11 @@ function StoreInspector({ build, deploy, store, updateDeploy, header }) {
       {T.note && <p className="helper-text">{T.note}</p>}
       {T.usd && <label className="field-label">Size<select value={store.size || 'Medium'} onChange={(event) => update('size', event.target.value)}>{Object.keys(T.usd).map((size) => <option key={size}>{size}</option>)}</select></label>}
       <ZonesField item={store} isStore update={update} />
+      {CACHEABLE.includes(store.type) && <>
+        <label className="toggle-field"><input type="checkbox" checked={!!store.cache?.hit} onChange={(event) => update('cache', event.target.checked ? { hit: 0.9 } : null)} />Cache in front for reads</label>
+        {store.cache?.hit > 0 && <label className="field-label">Cache hit ratio: {Math.round(store.cache.hit * 100)}%<input type="range" min="10" max="99" value={Math.round(store.cache.hit * 100)} aria-label={`Cache hit ratio for ${store.name}`} onChange={(event) => update('cache', { hit: Number(event.target.value) / 100 })} /></label>}
+        <p className="helper-text">{GLOSSARY.cache} {store.cache?.hit > 0 ? GLOSSARY.hitRatio : ''}</p>
+      </>}
       <label className="field-label">Copies across regions<select value={store.repl} onChange={(event) => update('repl', event.target.value)}>{T.repl.map((value) => <option key={value} value={value}>{E.REPL[value].label}</option>)}</select></label>
       {REPL_NOTES[store.repl] && <p className="helper-text">{REPL_NOTES[store.repl]}</p>}
       <label className="field-label">Read from<select value={store.readFrom || 'nearest'} onChange={(event) => update('readFrom', event.target.value)}><option value="nearest">Nearest copy</option><option value="primary">Primary only</option></select></label>

@@ -1,0 +1,66 @@
+{
+  "kind": "loadbearing-deploy",
+  "v": 1,
+  "id": "dp-ticket-sale-simple",
+  "name": "Single-region starter",
+  "regions": [
+    "use1"
+  ],
+  "peering": false,
+  "externals": {},
+  "compute": [
+    {
+      "id": "c-ticket-sale-simple",
+      "name": "app",
+      "type": "k8s",
+      "regions": [
+        "use1"
+      ],
+      "size": "Small",
+      "min": 2,
+      "max": 8,
+      "workloads": [
+        "TicketAPI",
+        "PaymentWorker"
+      ]
+    }
+  ],
+  "stores": [
+    {
+      "id": "s-ticket-sale-simple-0",
+      "name": "tickets-db",
+      "type": "postgres",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "Events",
+        "Inventory",
+        "Reservations"
+      ]
+    },
+    {
+      "id": "s-ticket-sale-simple-1",
+      "name": "payment-queue",
+      "type": "queue",
+      "regions": [
+        "use1"
+      ],
+      "primary": "use1",
+      "repl": "single",
+      "readFrom": "nearest",
+      "size": "Small",
+      "shards": 1,
+      "partitions": 12,
+      "data": [
+        "ReservationEvents"
+      ]
+    }
+  ]
+}

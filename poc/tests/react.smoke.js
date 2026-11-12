@@ -169,6 +169,21 @@ async function main() {
     await page.locator('.playback-events .fault-event').first().waitFor();
     await page.locator('.playback-panel').getByRole('button', { name: 'Close' }).click();
 
+    // Caches: turn one on in Deploy, see it in the results, then start it cold.
+    await page.getByRole('button', { name: 'Explore examples' }).click();
+    await page.getByRole('button', { name: 'Open Product catalog' }).click();
+    await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Deploy' }).click();
+    await page.getByTestId('infra-canvas').locator('.infra-node', { hasText: 'catalog-db' }).first().click();
+    await page.getByLabel('Cache in front for reads').check();
+    await page.getByLabel('Cache hit ratio for catalog-db').waitFor();
+    await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Simulate' }).click();
+    await page.getByRole('button', { name: 'Run simulation' }).click();
+    await page.getByRole('region', { name: 'Caches and retries' }).getByText('catalog-db cache', { exact: false }).first().waitFor();
+    await page.getByLabel('Experiment', { exact: true }).selectOption('cold');
+    await page.getByRole('button', { name: 'Compare before and after' }).click();
+    await page.getByRole('region', { name: 'Experiment result' }).locator('li', { hasText: 'cache starts empty' }).first().waitFor();
+    await page.getByRole('region', { name: 'Hot keys' }).getByLabel('Hot key share for Products').waitFor();
+
     await page.getByRole('navigation', { name: 'Design workflow' }).getByRole('button', { name: 'Build' }).click();
     await page.setViewportSize({ width: 400, height: 860 });
     await page.getByRole('heading', { name: 'System logic' }).waitFor();

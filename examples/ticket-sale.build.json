@@ -1,0 +1,154 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-ticket-sale",
+  "name": "Concert ticket sale",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "TicketAPI",
+      "x": 20,
+      "y": 80,
+      "code": "when ViewEvent {\n  read Events by event_id\n  read Inventory by event_id\n}\n\nwhen Reserve {\n  read Events by event_id\n  update Inventory by event_id\n  insert Reservations\n  publish ReservationEvents\n}"
+    },
+    {
+      "id": "w2",
+      "name": "PaymentWorker",
+      "x": 300,
+      "y": 320,
+      "code": "when message ReservationEvents {\n  call PaymentProvider.Charge\n  update Reservations by reservation_id\n}"
+    },
+    {
+      "id": "w3",
+      "name": "PaymentProvider",
+      "x": 20,
+      "y": 480,
+      "external": true,
+      "code": "# Runs outside your system. Use \"compute\" for the\n# response time you expect from the provider.\nwhen Charge {\n  compute 250ms\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "Events",
+      "kind": "table",
+      "x": 760,
+      "y": 120,
+      "rows": 50000,
+      "rowKB": 2,
+      "fields": [
+        {
+          "name": "event_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "starts_at",
+          "type": "timestamp"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "Inventory",
+      "kind": "kv",
+      "x": 500,
+      "y": 210,
+      "rows": 50000,
+      "rowKB": 0.1,
+      "fields": [
+        {
+          "name": "event_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "seats_left",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "name": "Reservations",
+      "kind": "table",
+      "x": 760,
+      "y": 300,
+      "rows": 50000000,
+      "rowKB": 0.5,
+      "fields": [
+        {
+          "name": "reservation_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "event_id",
+          "type": "uuid",
+          "index": true
+        },
+        {
+          "name": "status",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "name": "ReservationEvents",
+      "kind": "queue",
+      "x": 500,
+      "y": 390,
+      "rows": 0,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "reservation_id",
+          "type": "uuid"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc-tickets-onsale",
+      "name": "On-sale rush",
+      "entry": "TicketAPI.Reserve",
+      "count": 900000,
+      "durationMin": 15,
+      "burst": "peak",
+      "origins": {
+        "na": 80,
+        "eu": 20
+      },
+      "odds": {},
+      "hot": {
+        "Events": 0.7,
+        "Inventory": 0.7
+      },
+      "goalMs": 400
+    },
+    {
+      "id": "sc-tickets-view",
+      "name": "Fans refreshing the page",
+      "entry": "TicketAPI.ViewEvent",
+      "count": 6000000,
+      "durationMin": 30,
+      "burst": "peak",
+      "origins": {
+        "na": 80,
+        "eu": 20
+      },
+      "odds": {},
+      "hot": {
+        "Events": 0.8,
+        "Inventory": 0.8
+      },
+      "goalMs": 200
+    }
+  ]
+}

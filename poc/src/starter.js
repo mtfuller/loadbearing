@@ -126,12 +126,12 @@ function exampleSystems() {
     const makeDeploy = (suffix, deployName, regions, computeName, specs, size, min, max) => ({
       kind: 'loadbearing-deploy', v: 1, id: `dp-${id}-${suffix}`, name: deployName, regions,
       peering: regions.length > 1, externals: {},
-      compute: [{ id: `c-${id}-${suffix}`, name: computeName, type: 'k8s', regions, size, min, max, workloads: workloads.map((w) => w.name) }],
+      compute: [{ id: `c-${id}-${suffix}`, name: computeName, type: 'k8s', regions, size, min, max, workloads: workloads.filter((w) => !w.external).map((w) => w.name) }],
       stores: specs.map((spec, index) => ({
         id: `s-${id}-${suffix}-${index}`, name: spec.name, type: spec.type, regions: spec.regions || regions,
         primary: (spec.regions || regions)[0], repl: spec.repl || (regions.length > 1 ? 'read-replicas' : 'single'),
         readFrom: 'nearest', size: spec.size || size, shards: spec.shards || 1, partitions: spec.partitions || 12,
-        data: spec.data
+        ...(spec.cache ? { cache: spec.cache } : {}), data: spec.data
       }))
     });
     return {
@@ -212,6 +212,39 @@ function exampleSystems() {
         { id: 'sc-stream-transcode', name: 'New release transcode', entry: 'Transcoder.file Uploads', rows: 20000, goalMin: 180, origins: {}, odds: {} }],
       [{ name: 'catalog-db', type: 'postgres', data: ['Catalog', 'Manifests'] }, { name: 'video-store', type: 'objects', data: ['VideoObjects', 'Uploads'] }, { name: 'view-stream', type: 'kafka', data: ['ViewEvents'] }],
       [{ name: 'catalog-db', type: 'postgres', repl: 'read-replicas', data: ['Catalog', 'Manifests'] }, { name: 'video-store', type: 'objects', repl: 'crr', data: ['VideoObjects', 'Uploads'] }, { name: 'view-stream', type: 'kafka', repl: 'single', regions: ['use1'], data: ['ViewEvents'] }]
+    ),
+    system('product-catalog', 'Product catalog', 'Show product pages with prices and reviews to holiday shoppers, while prices change in the background.',
+      'Almost every request reads the same popular products. A cache in front takes those reads off the database. See what happens when it starts empty.',
+      [
+        { id: 'w1', name: 'CatalogAPI', x: 20, y: 80, code: 'when GetProduct {\n  read Products by product_id\n  read Prices by product_id\n  read Reviews by product_id many 5\n}\n\nwhen UpdatePrice {\n  update Prices by product_id\n}' }
+      ],
+      [
+        data('d1', 'Products', 'table', [F('product_id', 'uuid', { key: true }), F('category', 'text', { index: true }), F('name', 'text')], 5e6, 2),
+        data('d2', 'Prices', 'table', [F('product_id', 'uuid', { key: true }), F('amount', 'int'), F('updated_at', 'timestamp')], 5e6, 0.2),
+        data('d3', 'Reviews', 'table', [F('review_id', 'uuid', { key: true }), F('product_id', 'uuid', { index: true }), F('body', 'text')], 2e8, 1)
+      ],
+      [{ id: 'sc-catalog-browse', name: 'Holiday browsing', entry: 'CatalogAPI.GetProduct', count: 1.8e7, durationMin: 60, burst: 'peak', origins: { na: 60, eu: 25, asia: 15 }, odds: {}, goalMs: 150 },
+        { id: 'sc-catalog-prices', name: 'Price updates', entry: 'CatalogAPI.UpdatePrice', count: 360000, durationMin: 60, burst: 'steady', origins: { na: 100 }, odds: {}, goalMs: 200 }],
+      [{ name: 'catalog-db', type: 'postgres', data: ['Products', 'Prices', 'Reviews'] }],
+      [{ name: 'catalog-db', type: 'postgres', repl: 'read-replicas', cache: { hit: 0.95 }, data: ['Products', 'Prices', 'Reviews'] }]
+    ),
+    system('ticket-sale', 'Concert ticket sale', 'Sell a big concert the moment tickets go on sale: everyone wants the same event at the same time.',
+      'All the traffic lands on one event, so one key is hot. More shards do not help, and retries can make the overload worse. Payments happen after the request returns.',
+      [
+        { id: 'w1', name: 'TicketAPI', x: 20, y: 80, code: 'when ViewEvent {\n  read Events by event_id\n  read Inventory by event_id\n}\n\nwhen Reserve {\n  read Events by event_id\n  update Inventory by event_id\n  insert Reservations\n  publish ReservationEvents\n}' },
+        { id: 'w2', name: 'PaymentWorker', x: 300, y: 320, code: 'when message ReservationEvents {\n  call PaymentProvider.Charge\n  update Reservations by reservation_id\n}' },
+        { id: 'w3', name: 'PaymentProvider', x: 20, y: 480, external: true, code: '# Runs outside your system. Use "compute" for the\n# response time you expect from the provider.\nwhen Charge {\n  compute 250ms\n}' }
+      ],
+      [
+        data('d1', 'Events', 'table', [F('event_id', 'uuid', { key: true }), F('name', 'text'), F('starts_at', 'timestamp')], 50000, 2),
+        data('d2', 'Inventory', 'kv', [F('event_id', 'uuid', { key: true }), F('seats_left', 'int')], 50000, 0.1),
+        data('d3', 'Reservations', 'table', [F('reservation_id', 'uuid', { key: true }), F('event_id', 'uuid', { index: true }), F('status', 'text')], 5e7, 0.5),
+        data('d4', 'ReservationEvents', 'queue', [F('reservation_id', 'uuid')], 0, 0.2)
+      ],
+      [{ id: 'sc-tickets-onsale', name: 'On-sale rush', entry: 'TicketAPI.Reserve', count: 900000, durationMin: 15, burst: 'peak', origins: { na: 80, eu: 20 }, odds: {}, hot: { Events: 0.7, Inventory: 0.7 }, goalMs: 400 },
+        { id: 'sc-tickets-view', name: 'Fans refreshing the page', entry: 'TicketAPI.ViewEvent', count: 6e6, durationMin: 30, burst: 'peak', origins: { na: 80, eu: 20 }, odds: {}, hot: { Events: 0.8, Inventory: 0.8 }, goalMs: 200 }],
+      [{ name: 'tickets-db', type: 'postgres', data: ['Events', 'Inventory', 'Reservations'] }, { name: 'payment-queue', type: 'queue', data: ['ReservationEvents'] }],
+      [{ name: 'events-db', type: 'postgres', repl: 'read-replicas', cache: { hit: 0.98 }, data: ['Events', 'Reservations'] }, { name: 'inventory-kv', type: 'kv', repl: 'single', regions: ['use1'], data: ['Inventory'] }, { name: 'payment-queue', type: 'queue', repl: 'single', regions: ['use1'], data: ['ReservationEvents'] }]
     ),
     system('food-delivery', 'Food delivery marketplace', 'Search nearby restaurants, place orders, and coordinate couriers through asynchronous events.',
       'Dinner peaks stress restaurant and location lookups. Follow the order event to dispatch, then compare a single shared database with partitioned regional stores.',

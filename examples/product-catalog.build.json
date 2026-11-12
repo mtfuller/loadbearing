@@ -1,0 +1,121 @@
+{
+  "kind": "loadbearing-build",
+  "v": 1,
+  "id": "b-product-catalog",
+  "name": "Product catalog",
+  "workloads": [
+    {
+      "id": "w1",
+      "name": "CatalogAPI",
+      "x": 20,
+      "y": 80,
+      "code": "when GetProduct {\n  read Products by product_id\n  read Prices by product_id\n  read Reviews by product_id many 5\n}\n\nwhen UpdatePrice {\n  update Prices by product_id\n}"
+    }
+  ],
+  "data": [
+    {
+      "id": "d1",
+      "name": "Products",
+      "kind": "table",
+      "x": 760,
+      "y": 120,
+      "rows": 5000000,
+      "rowKB": 2,
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "index": true
+        },
+        {
+          "name": "name",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "Prices",
+      "kind": "table",
+      "x": 500,
+      "y": 210,
+      "rows": 5000000,
+      "rowKB": 0.2,
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "amount",
+          "type": "int"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp"
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "name": "Reviews",
+      "kind": "table",
+      "x": 760,
+      "y": 300,
+      "rows": 200000000,
+      "rowKB": 1,
+      "fields": [
+        {
+          "name": "review_id",
+          "type": "uuid",
+          "key": true
+        },
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "index": true
+        },
+        {
+          "name": "body",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "sc-catalog-browse",
+      "name": "Holiday browsing",
+      "entry": "CatalogAPI.GetProduct",
+      "count": 18000000,
+      "durationMin": 60,
+      "burst": "peak",
+      "origins": {
+        "na": 60,
+        "eu": 25,
+        "asia": 15
+      },
+      "odds": {},
+      "goalMs": 150
+    },
+    {
+      "id": "sc-catalog-prices",
+      "name": "Price updates",
+      "entry": "CatalogAPI.UpdatePrice",
+      "count": 360000,
+      "durationMin": 60,
+      "burst": "steady",
+      "origins": {
+        "na": 100
+      },
+      "odds": {},
+      "goalMs": 200
+    }
+  ]
+}

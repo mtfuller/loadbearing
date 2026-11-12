@@ -53,7 +53,9 @@ function planPath(M, path, r0) {
       const rows = scan ? (dn.rows || 1e6) : (s.rows || 1);
       const shards = shardCount(S); const pk = dn ? partitionKeyOf(S, dn) : null;
       const fan = shards > 1 && s.op === 'read' && s.by && pk && s.by !== pk ? shards : 1;
-      out.push(Object.assign(base, boxes, { kind: 'data', store: S, d: s.d, op: s.op, region: cur, target: t, hop, quorum: s.op !== 'read' ? quorumRtt(S) : 0, rows, scan, fan, label: `${s.op[0].toUpperCase() + s.op.slice(1)} ${s.d}${scan ? ' (full scan)' : rows > 1 ? ` (${fmtN(rows)} rows)` : ''}${fan > 1 ? ` (asks all ${fan} shards)` : ''}` + (t !== cur ? ` in ${REGIONS[t].code}` : '') }));
+      // A cache in front answers this share of key lookups; scans and writes always reach the store.
+      const cache = s.op === 'read' && !scan && S.cache && S.cache.hit > 0 ? Math.min(0.999, S.cache.hit) : 0;
+      out.push(Object.assign(base, boxes, { kind: 'data', store: S, d: s.d, op: s.op, region: cur, target: t, hop, quorum: s.op !== 'read' ? quorumRtt(S) : 0, rows, scan, fan, cache, label: `${s.op[0].toUpperCase() + s.op.slice(1)} ${s.d}${scan ? ' (full scan)' : rows > 1 ? ` (${fmtN(rows)} rows)` : ''}${fan > 1 ? ` (asks all ${fan} shards)` : ''}` + (t !== cur ? ` in ${REGIONS[t].code}` : '') }));
     } else if (s.k === 'compute') {
       if (ext) out.push(Object.assign(base, { kind: 'ext', w: ext.w, ms: s.ms, region: ext.region, box: 'x:' + ext.w, label: `${ext.w} responds` }));
       else out.push(Object.assign(base, { kind: 'cpu', box: curC ? 'c:' + curC.id + '@' + cur : null, comp: curC, region: cur, cpu: s.ms, label: `Compute ${s.ms} ms (${s.w})` }));
@@ -90,13 +92,16 @@ function addDemand(M, plan, w, acc, depth) {
     if (g.kind === 'cpu' && g.comp) { add('c:' + g.comp.id + '@' + g.region, 'cpu', g.cpu * m, { type: 'compute', ref: g.comp, region: g.region }); add('c:' + g.comp.id + '@' + g.region, 'conc', m * (g.cpu * 1.6 + 12) / 1000, {}); (acc.users[g.comp.id + '@' + g.region] || (acc.users[g.comp.id + '@' + g.region] = new Set())); }
     else if (g.kind === 'net') { if (g.from !== g.to) { const k = g.from + '>' + g.to; acc.flows[k] = (acc.flows[k] || 0) + m; } if (g.external) add('x:' + g.s.w, 'rps', m, { type: 'external', name: g.s.w, region: g.to }); }
     else if (g.kind === 'data') {
-      const S = g.store; const cost = (g.op === 'read' ? (g.scan ? g.rows / 400 : 1 + g.rows / 50) : 2) * (g.fan || 1);
+      const S = g.store; const cost = (g.op === 'read' ? (g.scan ? g.rows / 400 : 1 + g.rows / 50) : 2) * (g.fan || 1) * (1 - (g.cache || 0));
       add('s:' + S.id + '@' + g.target, 'ops', cost * m, { type: 'store', ref: S, region: g.target });
+      const hot = (acc.hot && acc.hot[g.d]) || 0; if (hot) { const o = acc.res['s:' + S.id + '@' + g.target]; o.hotOps = (o.hotOps || 0) + cost * m * hot; }
+      if (g.cache) { const k = 'k:' + S.id + '@' + g.target; acc.caches[k] = acc.caches[k] || { ref: S, region: g.target, reads: 0, hit: g.cache }; acc.caches[k].reads += m; }
       if (g.op !== 'read' && S.repl !== 'single') S.regions.forEach(r => { if (r !== g.target) { add('s:' + S.id + '@' + r, 'ops', m, { type: 'store', ref: S, region: r }); const k = g.target + '>' + r; acc.repl[k] = (acc.repl[k] || 0) + m; } });
       if (g.target !== g.region) { const k = g.region + '>' + g.target; acc.flows[k] = (acc.flows[k] || 0) + m; }
       (acc.conn[S.id] || (acc.conn[S.id] = new Set())).add(planComp(plan, g));
     } else if (g.kind === 'pub') {
       add('s:' + g.store.id + '@' + g.target, 'pub', m, { type: 'store', ref: g.store, region: g.target });
+      const hotP = (acc.hot && acc.hot[g.d]) || 0; if (hotP) { const o = acc.res['s:' + g.store.id + '@' + g.target]; o.hotPub = (o.hotPub || 0) + m * hotP; }
       acc.pubs[g.d] = (acc.pubs[g.d] || 0) + m;
       if (depth < 3) M.A.triggers.filter(t => t.d === g.d && t.type === 'message').forEach(t => {
         const key = t.w + '.' + t.h; const C = M.comp[t.w]; if (!C) return;
@@ -111,6 +116,9 @@ function planComp(plan, g) { let c = null; for (const x of plan) { if (x === g) 
 function planLatency(plan) { let t = 0; plan.forEach(g => { if (g.kind === 'net') t += g.hop; else if (g.kind === 'cpu') t += g.cpu; else if (g.kind === 'data') t += g.hop + 3; else if (g.kind === 'pub') t += g.hop + 5; else if (g.kind === 'ext') t += g.ms; }); return t; }
 function cachedPaths(M, key, odds) { M._pc = M._pc || {}; const k = key + JSON.stringify(odds || {}); if (!M._pc[k]) M._pc[k] = enumeratePaths(M.A, key, odds || {}); return M._pc[k]; }
 
+// A serverless key-value store splits data automatically, but one key lives on one partition.
+// Assumption: about 3,000 operations/s per key (DynamoDB's per-partition read limit, before adaptive capacity).
+const HOT_KEY_OPS = 3000;
 /* resource states from demand */
 function resourceStates(M, acc) {
   const R = {};
@@ -129,6 +137,12 @@ function resourceStates(M, acc) {
       const S = o.ref, T = STORES[S.type]; let rho = 0, what = 'capacity';
       if (T.cap) rho = o.ops / ((T.cap[S.size] || 20000) * shardCount(S));
       if (T.partitions) { const pr = o.pub / ((S.partitions || 12) * 1000); if (pr > rho) { rho = pr; what = 'partition throughput'; } }
+      // Hot keys: one key's share of the work lands on one shard (or one partition), however many there are.
+      if (o.hotOps && (T.cap || T.autoShard)) {
+        const n = shardCount(S); const hr = T.autoShard ? o.hotOps / HOT_KEY_OPS : ((o.ops - o.hotOps) / n + o.hotOps) / (T.cap[S.size] || 20000);
+        if (hr > rho) { rho = hr; what = 'one hot key'; }
+      }
+      if (o.hotPub && T.partitions) { const P = S.partitions || 12; const hr = ((o.pub - o.hotPub) / P + o.hotPub) / 1000; if (hr > rho) { rho = hr; what = 'one hot key'; } }
       R[k] = Object.assign({}, o, { rho, label: `${S.name} (${REGIONS[o.region].code})${shardCount(S) > 1 ? ` · ${shardCount(S)} shards` : ''}`, what });
     } else if (o.type === 'nat') R[k] = Object.assign({}, o, { rho: o.rps / NET.nat.cap, cap: NET.nat.cap, label: `NAT gateway (${REGIONS[o.region].code})`, what: 'connections' });
     else if (o.type === 'gateway') R[k] = Object.assign({}, o, { rho: o.rps / Math.max(1, o.limit), cap: o.limit, label: `API gateway (${REGIONS[o.region].code})`, what: 'request limit' });
@@ -153,12 +167,19 @@ function evaluateRate(M, sc, opt) {
   const lam = opt.lambda != null ? opt.lambda : scenarioRate(sc);
   const paths = cachedPaths(M, sc.entry, sc.odds);
   const origins = originsFor(M, sc, e);
-  const acc = { res: {}, flows: {}, repl: {}, pubs: {}, consumers: {}, conn: {}, users: {}, links: {} };
+  const acc = { res: {}, flows: {}, repl: {}, pubs: {}, consumers: {}, conn: {}, users: {}, links: {}, caches: {}, hot: sc.hot || {} };
   const plans = origins.map(o => paths.map(p => o.region ? planPath(M, p, o.region) : []));
   origins.forEach((o, oi) => paths.forEach((p, pi) => { if (o.region) addDemand(M, plans[oi][pi], lam * o.share * p.p, acc, 0); }));
   origins.forEach(o => { if (!o.region) return; const k = 'g:' + o.region; if (o.entry === 'apigw') { const r = acc.res[k] || (acc.res[k] = { type: 'gateway', region: o.region, rps: 0, limit: o.limit || 10000, cpu: 0, ops: 0, conc: 0, pub: 0 }); r.rps += lam * o.share; } const ub = o.pop ? 'u:' + o.pop : null; const eb = o.entry !== 'none' ? 'e:' + o.region : null; if (ub) { if (eb) { acc.links[ub + '|' + eb + '|call'] = (acc.links[ub + '|' + eb + '|call'] || 0) + lam * o.share; acc.links[eb + '|' + o.box + '|call'] = (acc.links[eb + '|' + o.box + '|call'] || 0) + lam * o.share; } else acc.links[ub + '|' + o.box + '|call'] = (acc.links[ub + '|' + o.box + '|call'] || 0) + lam * o.share; } });
   const R = resourceStates(M, acc);
   if (opt.adjust) opt.adjust(R);
+  // Retries add load where requests fail: each failed try comes back. One pass, not a full fixed point.
+  const pol = retryPolicy(M.Dp);
+  if (pol.retries) Object.values(R).forEach(st => {
+    if (!['compute', 'store', 'gateway', 'nat'].includes(st.type) || st.rho <= 0.97 || st.down) return;
+    const pf = 1 - 0.97 / st.rho; const amp = (1 - Math.pow(pf, pol.retries + 1)) / (1 - pf);
+    st.retryAmp = amp; st.rho *= amp;
+  });
   // tracers
   const all = new Hist(), byPath = paths.map(() => new Hist()), byPop = origins.map(() => new Hist()), pathW = paths.map(() => 0), pathErr = paths.map(() => 0);
   let sysErr = 0, bizErr = 0, tot = 0, slow = null; const why = {};
@@ -191,6 +212,8 @@ function evaluateRate(M, sc, opt) {
     if (s.type === 'compute') { const C = s.ref; if (C.type === 'fn') cAdd('Compute', lam ? s.conc * 3600 * 0.0000166667 * (C.memory || 1024) / 1024 + s.cpu / 1 * 0 : 0); else cAdd('Compute', s.inst * s.cores * COMPUTE[C.type].usd); }
     if (s.type === 'store') { const S = s.ref, T = STORES[S.type]; if (T.usd) cAdd('Databases and storage', (T.usd[S.size] || 1) * (s.region === S.primary || S.repl === 'single' ? 1 : 0.6) * (zonesEditable(S, true) && zonesOf(S, true) > 1 ? ZONE_STANDBY_COST : 1)); if (T.perM) cAdd('Databases and storage', (s.ops + s.pub) * 3600 / 1e6 * T.perM[1]); }
   });
+  // A cache in front of a store: one small in-memory node per region it serves.
+  Object.values(acc.caches).forEach(() => cAdd('Databases and storage', STORES.redis.usd.Small));
   Object.values(R).forEach(s => { if (s.type === 'nat') cAdd('Network', NET.nat.usd + s.rps * 3600 * 4 / 1e6 * 0.045); if (s.type === 'gateway') cAdd('Network', s.rps * 3600 / 1e6 * 1.0); });
   Object.values(acc.flows).forEach(v => cAdd('Traffic between regions', v * 3600 * 4 / 1e6 * 0.02));
   Object.values(acc.repl).forEach(v => cAdd('Traffic between regions', v * 3600 * 2 / 1e6 * 0.02));
@@ -205,50 +228,77 @@ function evaluateRate(M, sc, opt) {
   origins.forEach(o => { if (o.region) onPath.add('g:' + o.region); });
   const pathRanked = ranked.filter(([k]) => onPath.has(k)), asyncRanked = ranked.filter(([k]) => !onPath.has(k));
   return {
-    mode: 'rate', lambda: lam, entry: e, paths, origins, R, ranked, pathRanked, asyncRanked, samples: tot, ok: tot - sysErr, links: acc.links, flows: acc.flows, repl: acc.repl, lags,
+    mode: 'rate', lambda: lam, entry: e, paths, origins, R, ranked, caches: acc.caches, retry: pol, pathRanked, asyncRanked, samples: tot, ok: tot - sysErr, links: acc.links, flows: acc.flows, repl: acc.repl, lags,
     p50: all.q(0.5), p95: all.q(0.95), p99: all.q(0.99), sysErr: tot ? sysErr / tot : 0, bizErr: tot ? bizErr / tot : 0, why,
     pathStats: paths.map((p, i) => ({ path: p, share: pathW[i] / (tot || 1), p50: byPath[i].q(0.5), p99: byPath[i].q(0.99), err: pathW[i] ? pathErr[i] / pathW[i] : 0 })),
     popStats: origins.map((o, i) => ({ o, p50: byPop[i].q(0.5), p99: byPop[i].q(0.99) })), slow, cost, costBy
   };
 }
+// Retries and timeouts (Deploy → whole deployment). A timeout cuts one attempt at a call, data
+// operation or outside service; a retry tries it again after a short backoff. Local compute is not timed out.
+const RETRY_BACKOFF_MS = 25; // first retry waits ~25 ms, then doubles. Assumption: exponential backoff, no jitter.
+function retryPolicy(Dp) { const n = (Dp && Dp.network) || {}; return { timeoutMs: Math.max(0, n.timeoutMs || 0), retries: Math.max(0, Math.min(5, n.retries || 0)) }; }
 function runTracer(M, plan, R, rng, o, keepSpans) {
   let t = 0, sys = null, biz = false; const spans = [];
-  const groups = {}; let curG = 0;
+  const groups = {}; let curG = 0; const pol = retryPolicy(M.Dp);
   const flushG = () => { if (!curG) return; const g = groups[curG]; const mx = Math.max(...Object.values(g)); spans.push(['in parallel', t, mx, 'par']); t += mx; curG = 0; };
   if (o.reach) { spans.push([o.pop ? `${POPS[o.pop].label} → ${REGIONS[o.region].code}` : `Start in ${REGIONS[o.region].code}`, 0, o.reach, 'net', { kind: 'net', toBox: o.entry && o.entry !== 'none' ? 'e:' + o.region : o.box, fromBox: o.pop ? 'u:' + o.pop : null }]); t += o.reach; }
   if (o.edgeMs) { const gw = R['g:' + o.region]; let l = o.edgeMs; if (gw && gw.rho > 1 && rng.u() < 1 - 1 / gw.rho) sys = `API gateway in ${REGIONS[o.region].code} rejected it (over its limit)`; spans.push([`${NET.entry[o.entry].label} (${REGIONS[o.region].code})`, t, l, 'net', { kind: 'edge', box: 'e:' + o.region, fromBox: 'e:' + o.region, toBox: o.box }]); t += l; if (sys) return { t, sys, biz, spans }; }
-  for (const g of plan) {
-    if (g.pg !== curG) { flushG(); if (g.pg) curG = g.pg; }
-    let lat = 0; const m = g.mult / g.par; const big = g.mult > 40;
+  // One try at one step: its latency (for one operation) and why it failed, if it did.
+  const attempt = (g, big) => {
+    let lat = 0, fail = null;
     if (g.kind === 'net') lat = g.hop < 0.2 ? g.hop : (big ? g.hop * 1.03 : logn(rng, g.hop, g.hop * 1.15 + 0.6));
     else if (g.kind === 'cpu') {
       const st = g.comp && R['c:' + g.comp.id + '@' + g.region];
-      if (g.comp && g.comp.down) { sys = sys || g.comp.down; }
-      else if (!st) { lat = g.cpu; }
+      if (g.comp && g.comp.down) fail = g.comp.down;
+      else if (!st) lat = g.cpu;
       else {
         const rho = Math.min(st.rho, 0.97); const cc = Math.max(1, (st.inst || 1) * (st.cores || 1));
         const wait = g.cpu * Math.pow(rho, Math.sqrt(2 * (cc + 1)) - 1) / (cc * (1 - rho));
         lat = big ? lnMean(g.cpu + wait * 0.7, g.cpu * 2.5 + wait * 4.6) : logn(rng, g.cpu + wait * 0.7, g.cpu * 2.5 + wait * 4.6);
-        if (st.rho > 0.97 && rng.u() < 1 - 0.97 / st.rho) sys = sys || `${g.comp.name} is overloaded`;
+        if (st.rho > 0.97 && rng.u() < 1 - 0.97 / st.rho) fail = `${g.comp.name} is overloaded`;
         if (g.comp.type === 'fn' && g.s.k === 'enter' && rng.u() < (st.rho > 0.85 ? 0.05 : 0.006)) lat += logn(rng, 250, 900);
         if (g.comp.type === 'ctr' && g.s.k === 'enter' && (g.comp.min || 0) === 0 && rng.u() < (st.inst <= 1 ? 0.15 : 0.01)) lat += logn(rng, 1500, 4000);
       }
     } else if (g.kind === 'data') {
       const T = STORES[g.store.type]; const st = R['s:' + g.store.id + '@' + g.target]; const rho = st ? Math.min(st.rho, 0.97) : 0;
+      if (g.cache && (big ? false : rng.u() < g.cache)) {
+        // Answered by the cache in front: a fast in-memory read, and the database never sees it.
+        const C = STORES.redis.read; lat = 0.5 + (big ? lnMean(C[0], C[1]) : logn(rng, C[0], C[1]));
+        return { lat, fail: null, hit: true };
+      }
       const um = (1 + rho * rho * rho / (1 - rho) * 0.5) * (g.fan > 1 ? 1 + 0.35 * Math.log2(g.fan) : 1); const prof = (g.op === 'read' ? T.read : T.write) || T.pub;
       const base = big ? lnMean(prof[0] * um, prof[1] * um) : logn(rng, prof[0] * um, prof[1] * um);
       lat = g.hop + g.quorum + base + (g.rows > 1 ? g.rows * 0.01 : 0) + (g.scan ? g.rows / 40000 : 0) + (g.store.slowMs || 0);
-      if (g.store.down) sys = sys || g.store.down;
-      const cn = R['conn:' + g.store.id]; if (cn && cn.rho > 1 && rng.u() < 1 - 1 / cn.rho) { lat += logn(rng, 30, 400); if (lat > 3000) sys = sys || `${g.store.name} ran out of connections`; }
-      if (st && st.rho > 0.97 && rng.u() < 1 - 0.97 / st.rho) sys = sys || `${g.store.name} is overloaded`;
-    } else if (g.kind === 'pub') { const T = STORES[g.store.type]; const pp = T.pub || T.write; const st = R['s:' + g.store.id + '@' + g.target]; lat = g.hop + logn(rng, pp[0], pp[1]) + (g.store.slowMs || 0); if (g.store.down) sys = sys || g.store.down; if (st && st.rho > 1 && rng.u() < 1 - 1 / st.rho) sys = sys || `${g.store.name} can’t take more events`; }
+      // a looped read behind a cache: the average of hits and misses
+      if (g.cache && big) { const C = STORES.redis.read; lat = g.cache * (0.5 + lnMean(C[0], C[1])) + (1 - g.cache) * (lat + 0.5); }
+      else if (g.cache) lat += 0.5; // the miss checked the cache first
+      if (g.store.down) fail = g.store.down;
+      const cn = R['conn:' + g.store.id]; if (cn && cn.rho > 1 && rng.u() < 1 - 1 / cn.rho) { lat += logn(rng, 30, 400); if (lat > 3000) fail = fail || `${g.store.name} ran out of connections`; }
+      if (st && st.rho > 0.97 && rng.u() < 1 - 0.97 / st.rho) fail = fail || (st.what === 'one hot key' ? `${g.store.name} is overloaded on one hot key` : `${g.store.name} is overloaded`);
+    } else if (g.kind === 'pub') { const T = STORES[g.store.type]; const pp = T.pub || T.write; const st = R['s:' + g.store.id + '@' + g.target]; lat = g.hop + logn(rng, pp[0], pp[1]) + (g.store.slowMs || 0); if (g.store.down) fail = g.store.down; if (st && st.rho > 1 && rng.u() < 1 - 1 / st.rho) fail = fail || `${g.store.name} can’t take more events`; }
     else if (g.kind === 'ext') lat = (big ? lnMean(g.ms, g.ms * 2.5) : logn(rng, g.ms, g.ms * 2.5)) + ((M.slowExt && M.slowExt[g.w]) || 0);
-    else if (g.kind === 'err') { biz = true; }
-    if (g.nat) { const nt = R['n:' + g.nat]; if (nt && nt.rho > 1 && rng.u() < 1 - 1 / nt.rho) sys = sys || `NAT gateway in ${REGIONS[g.nat].code} ran out of connections`; }
-    lat *= m;
+    if (g.nat) { const nt = R['n:' + g.nat]; if (nt && nt.rho > 1 && rng.u() < 1 - 1 / nt.rho) fail = fail || `NAT gateway in ${REGIONS[g.nat].code} ran out of connections`; }
+    return { lat, fail };
+  };
+  for (const g of plan) {
+    if (g.pg !== curG) { flushG(); if (g.pg) curG = g.pg; }
+    const m = g.mult / g.par; const big = g.mult > 40;
+    if (g.kind === 'err') { biz = true; break; }
+    const timed = pol.timeoutMs > 0 && g.kind !== 'cpu' && !(g.kind === 'net' && g.inproc);
+    let a, tries = 0, waited = 0;
+    for (;;) {
+      a = attempt(g, big);
+      if (timed && a.lat > pol.timeoutMs) { a.lat = pol.timeoutMs; a.fail = a.fail || `${g.label.replace(/ ×.*$/, '')} timed out after ${pol.timeoutMs} ms`; }
+      if (!a.fail || tries >= pol.retries) break;
+      waited += a.lat + RETRY_BACKOFF_MS * Math.pow(2, tries); tries++;
+    }
+    if (a.fail) sys = tries ? `${a.fail}, even after ${tries} ${tries === 1 ? 'retry' : 'retries'}` : a.fail;
+    const lat = (waited + a.lat) * m;
+    const label = tries ? `${g.label} (${tries} ${tries === 1 ? 'retry' : 'retries'})` : a.hit ? `${g.label} (cache hit)` : g.label;
     if (curG) { const gg = groups[curG] || (groups[curG] = {}); gg[g.pi] = (gg[g.pi] || 0) + lat; }
-    else { if (keepSpans && g.kind !== 'err') spans.push([g.label, t, lat, g.kind, g]); t += lat; }
-    if (sys || biz) break;
+    else { if (keepSpans) spans.push([label, t, lat, g.kind, g]); t += lat; }
+    if (sys) break;
   }
   flushG();
   if (t > 30000 && !sys) sys = 'Timed out after 30 s';
@@ -301,10 +351,12 @@ function suggestionsFor(M, sc, r) {
   const hot = path.find(([, s]) => s.type !== 'conn' && s.rho > 0.9);
   if (hot) {
     const s = hot[1]; let tip = '';
-    if (s.type === 'compute') tip = s.ref.type === 'fn' ? 'Raise its concurrency limit, or move it to containers that serve many requests each.' : `Raise its maximum instances (now ${s.ref.max || 1}) or use a bigger size.`;
-    else if (s.type === 'store') tip = s.ref.shards > 1 ? 'Add shards, add read copies, or move lookups to a faster store.' : 'Add shards, add read copies for reads, or use a bigger size.';
-    else if (s.type === 'gateway') tip = 'Raise the gateway limit or use a load balancer instead.';
-    else if (s.type === 'nat') tip = 'Use private endpoints for managed services, or a NAT gateway per region.';
+    if (s.retryAmp > 1.05) tip = `Retries make it worse: failed tries come back and add about ${Math.round((s.retryAmp - 1) * 100)}% more load. `;
+    if (s.type === 'compute') tip += s.ref.type === 'fn' ? 'Raise its concurrency limit, or move it to containers that serve many requests each.' : `Raise its maximum instances (now ${s.ref.max || 1}) or use a bigger size.`;
+    else if (s.type === 'store' && s.what === 'one hot key') tip += 'One key gets so much of the traffic that one shard does most of the work, so more shards will not help. Put a cache in front for reads, or split the key (for example, into several counters).';
+    else if (s.type === 'store') tip += (s.ref.shards > 1 ? 'Add shards, add read copies, or move lookups to a faster store.' : 'Add shards, add read copies for reads, or use a bigger size.') + (STORES[s.ref.type].cap && s.ref.type !== 'redis' && !(s.ref.cache && s.ref.cache.hit) ? ' If most of the load is reads, a cache in front takes them off the database.' : '');
+    else if (s.type === 'gateway') tip += 'Raise the gateway limit or use a load balancer instead.';
+    else if (s.type === 'nat') tip += 'Use private endpoints for managed services, or a NAT gateway per region.';
     out.push({ id: 'hot', text: `${s.label} is ${Math.round(s.rho * 100)}% busy (${s.what}). ${tip}`, target: target(s) });
   }
   if (r.slow) {
@@ -327,12 +379,15 @@ function suggestionsFor(M, sc, r) {
 /* ---------- experiments: change or break one thing, then compare ---------- */
 // Slow-dependency experiments add this much to every call (ms). Assumption: a sick dependency, not a dead one.
 const SLOW_STORE_MS = 100, SLOW_EXTERNAL_MS = 400;
+// An empty cache fills as keys are read. Assumption: hit ratio climbs linearly back to normal over 10 minutes.
+const CACHE_WARM_S = 600;
 // The experiments that make sense for this Deploy. Each is plain data, so the UI can list and replay it.
 function faultOptions(B, Dp) {
   const code = r => REGIONS[r].code; const out = [{ id: 'traffic', label: 'Double the traffic', fault: { kind: 'traffic', factor: 2 } }];
   Dp.regions.forEach(r => out.push({ id: 'region:' + r, label: `Lose ${code(r)} (the whole region)`, fault: { kind: 'region', region: r } }));
   Dp.regions.forEach(r => out.push({ id: 'zone:' + r, label: `Lose one zone in ${code(r)}`, fault: { kind: 'zone', region: r } }));
   Dp.stores.forEach(S => out.push({ id: 'slow:s:' + S.id, label: `Slow down ${S.name} (+${SLOW_STORE_MS} ms)`, fault: { kind: 'slow', store: S.id, ms: SLOW_STORE_MS } }));
+  if (Dp.stores.some(S => S.cache && S.cache.hit > 0)) out.push({ id: 'cold', label: 'Start with empty caches (cold cache)', fault: { kind: 'cold' } });
   (B.workloads || []).filter(w => w.external).forEach(w => out.push({ id: 'slow:x:' + w.name, label: `Slow down ${w.name} (+${SLOW_EXTERNAL_MS} ms)`, fault: { kind: 'slow', external: w.name, ms: SLOW_EXTERNAL_MS } }));
   return out;
 }
@@ -342,6 +397,12 @@ function applyFault(B, A, Dp, sc, fault) {
   const D2 = JSON.parse(JSON.stringify(Dp)); const V = validateDeploy(B, A, D2); if (!V.valid) return null;
   const M = compileModel(B, A, D2, V); const notes = []; const code = r => REGIONS[r].code; let scale = 1;
   if (fault.kind === 'traffic') { scale = fault.factor || 2; notes.push(`${scale === 2 ? 'Twice' : scale + ' times'} as many requests: about ${Math.round(scenarioRate(sc) * scale).toLocaleString()} requests/s at the peak instead of ${Math.round(scenarioRate(sc)).toLocaleString()}.`); }
+  let warm = null;
+  if (fault.kind === 'cold') {
+    warm = [];
+    D2.stores.forEach(S => { if (!(S.cache && S.cache.hit > 0)) return; warm.push({ id: S.id, hit: S.cache.hit }); notes.push(`${S.name}'s cache starts empty, so every read goes to ${S.name} until it fills (${Math.round(S.cache.hit * 100)}% of reads are hits once warm).`); S.cache.hit = 0; });
+    notes.push(`In playback the caches fill back up over about ${Math.round(CACHE_WARM_S / 60)} minutes.`);
+  }
   if (fault.kind === 'slow') {
     if (fault.store) { const S = D2.stores.find(x => x.id === fault.store); if (S) { S.slowMs = fault.ms; notes.push(`Every read and write to ${S.name} takes ${fault.ms} ms longer. Requests that wait on it slow down, and compute holds each request longer.`); } }
     if (fault.external) { M.slowExt = { [fault.external]: fault.ms }; notes.push(`${fault.external} answers ${fault.ms} ms slower. Every request that calls it waits that long too.`); }
@@ -371,7 +432,7 @@ function applyFault(B, A, Dp, sc, fault) {
     if (!zone && D2.regions.length > 1) D2.regions = D2.regions.filter(x => x !== r);
     if (!notes.length) notes.push(`Nothing in this design runs in ${code(r)}.`);
   }
-  return { M, sc: scale !== 1 ? Object.assign({}, sc, { count: (sc.count || 0) * scale }) : sc, scale, notes };
+  return { M, sc: scale !== 1 ? Object.assign({}, sc, { count: (sc.count || 0) * scale }) : sc, scale, notes, warm };
 }
 // One sentence on what the experiment did to the design, failures first.
 function compareExperiment(sc, before, after) {
@@ -440,6 +501,8 @@ function simulateTimeline(M, sc, opt) {
   const prevRho = {}; let prevErr = 0;
   for (let i = 0; i < F; i++) {
     const f = (i + 0.5) / F; const broken = i >= fi; const lam = base * shapeAt(sc, f) * (broken && fault.scale ? fault.scale : 1);
+    if (broken && fault.warm) fault.warm.forEach(w => { const S = fault.M.Dp.stores.find(x => x.id === w.id); if (S) S.cache.hit = w.hit * Math.min(1, ((i - fi) * dt) / CACHE_WARM_S); });
+    if (fault && fault.warm && i > fi && (i - fi) * dt >= CACHE_WARM_S && (i - fi - 1) * dt < CACHE_WARM_S) events.push({ i, t: f * durS, kind: 'ok', fault: true, msg: 'Caches are warm again' });
     if (i === fi) { events.push({ i, t: f * durS, kind: 'bad', fault: true, msg: fault.label }); (fault.notes || []).forEach(n => events.push({ i, t: f * durS, kind: 'info', fault: true, msg: n })); }
     const r = evaluateRate(broken ? fault.M : M, sc, { lambda: lam, N: opt.N || 220, seed: 100 + i, adjust: R => {
       Object.entries(R).forEach(([k, st]) => {
@@ -483,7 +546,9 @@ function stepRequest(M, sc, path, origin, R) {
     if (g.kind === 'net') { dur = g.hop; why = g.inproc ? 'Same process: no network hop.' : g.external ? `Outside service ${REGIONS[g.to].code}; includes TLS and the provider’s front door${g.nat ? ', through the NAT gateway' : ''}.` : g.from !== g.to ? `Crosses regions ${REGIONS[g.from].code} → ${REGIONS[g.to].code}.` : 'Network hop inside the region.'; }
     else if (g.kind === 'cpu') { const st = g.comp && R['c:' + g.comp.id + '@' + g.region]; dur = g.cpu; if (st) { rho = st.rho; const r2 = Math.min(st.rho, 0.97); const cc = Math.max(1, (st.inst || 1) * (st.cores || 1)); wait = g.cpu * Math.pow(r2, Math.sqrt(2 * (cc + 1)) - 1) / (cc * (1 - r2)) * 0.7; } why = wait > 0.5 ? `Waited ${wait.toFixed(1)} ms for a free CPU: ${g.comp.name} is ${Math.round(rho * 100)}% busy.` : 'Work on the CPU.'; }
     else if (g.kind === 'data') { const T = STORES[g.store.type]; const st = R['s:' + g.store.id + '@' + g.target]; rho = st ? st.rho : null; const r2 = Math.min(rho || 0, 0.97); const um = (1 + r2 * r2 * r2 / (1 - r2) * 0.5) * (g.fan > 1 ? 1 + 0.35 * Math.log2(g.fan) : 1); const prof = (g.op === 'read' ? T.read : T.write) || T.pub; const svc = prof[0]; wait = svc * (um - 1); dur = g.hop + g.quorum + svc + (g.rows > 1 ? g.rows * 0.01 : 0) + (g.scan ? g.rows / 40000 : 0) + (g.store.slowMs || 0);
-      why = [g.store.slowMs ? `${g.store.name} is slowed by ${g.store.slowMs} ms in this experiment.` : '', g.target !== g.region ? `${REGIONS[g.target].code} is ${Math.round(g.hop)} ms away.` : '', g.quorum ? `Waits ${g.quorum} ms for a majority of regions to agree.` : '', g.scan ? 'No index on this field, so it reads every row.' : '', g.fan > 1 ? `Asks all ${g.fan} shards and merges the answers.` : '', wait > 0.5 ? `Queued ${wait.toFixed(1)} ms: ${g.store.name} is ${Math.round(rho * 100)}% busy.` : ''].filter(Boolean).join(' ') || `${T.label} ${g.op}.`; }
+      why = [g.store.slowMs ? `${g.store.name} is slowed by ${g.store.slowMs} ms in this experiment.` : '', g.target !== g.region ? `${REGIONS[g.target].code} is ${Math.round(g.hop)} ms away.` : '', g.quorum ? `Waits ${g.quorum} ms for a majority of regions to agree.` : '', g.scan ? 'No index on this field, so it reads every row.' : '', g.fan > 1 ? `Asks all ${g.fan} shards and merges the answers.` : '', wait > 0.5 ? `Queued ${wait.toFixed(1)} ms: ${g.store.name} is ${Math.round(rho * 100)}% busy.` : ''].filter(Boolean).join(' ') || `${T.label} ${g.op}.`;
+      // Typical time with a cache in front: hits are about a millisecond, misses pay the full trip.
+      if (g.cache) { const hitMs = 0.5 + STORES.redis.read[0]; dur = g.cache * hitMs + (1 - g.cache) * (dur + 0.5); wait *= 1 - g.cache; why = `A cache in front answers ${Math.round(g.cache * 100)}% of these reads in about ${hitMs.toFixed(1)} ms; the rest go to ${g.store.name}. ` + why; } }
     else if (g.kind === 'pub') { const T = STORES[g.store.type]; const pp = T.pub || T.write; dur = g.hop + pp[0]; why = `Hands the message to ${g.store.name}. Consumers pick it up later.`; }
     else if (g.kind === 'ext') { const slow = (M.slowExt && M.slowExt[g.w]) || 0; dur = g.ms + slow; why = slow ? `Response time you set in Build, plus ${slow} ms from the experiment.` : 'Response time you set in Build.'; }
     else if (g.kind === 'err') { push({ label: g.label, dur: 0, kind: 'err', why: 'The request ends with this error.' }); break; }
@@ -495,4 +560,4 @@ function stepRequest(M, sc, path, origin, R) {
   if (grp) t = gs + gmax;
   return { steps, total: t };
 }
-if (typeof module !== 'undefined') module.exports = { faultOptions, applyFault, compareExperiment, rateVerdict, suggestionsFor, simulateTimeline, stepRequest, shapeAt, evaluateRate, evaluateBatch, stressTest, tracePath, compileModel, scenarioMode, scenarioRate, entryInfo, planPath, fmtN };
+if (typeof module !== 'undefined') module.exports = { retryPolicy, faultOptions, applyFault, compareExperiment, rateVerdict, suggestionsFor, simulateTimeline, stepRequest, shapeAt, evaluateRate, evaluateBatch, stressTest, tracePath, compileModel, scenarioMode, scenarioRate, entryInfo, planPath, fmtN };
